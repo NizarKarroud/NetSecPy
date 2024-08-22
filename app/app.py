@@ -6,14 +6,16 @@ import webbrowser
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QMenuBar,
     QAction, QStatusBar, QHBoxLayout, QFrame, QScrollArea, QRadioButton,
-    QButtonGroup, QPushButton, QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView
+    QButtonGroup, QPushButton, QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView , QLineEdit
 )
 from PyQt5.QtCore import Qt, QMetaObject, Q_ARG, pyqtSlot
 from scapy.all import sniff, IP , IP_PROTOS
+from scapy.plist import PacketList
 
 class SnifferApp(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.sniffed_packets = PacketList()  # To store sniffed packets
 
         # Initialize selected interface variable
         self.selected_interface = None
@@ -219,10 +221,51 @@ class SnifferApp(QMainWindow):
         sniffer_tab = QWidget()
         layout = QVBoxLayout(sniffer_tab)
 
+        # Add a horizontal layout for the filter input and button
+        filter_layout = QHBoxLayout()
+
+        # Create the QLineEdit for BPF filter input
+        self.filter_input = QLineEdit(self)
+        self.filter_input.setPlaceholderText("Enter BPF filter...")
+        self.filter_input.setStyleSheet("""
+            QLineEdit {
+                border: 2px solid #555555;
+                border-radius: 15px;
+                padding: 10px;
+                background-color: #333333;
+                color: #FFFFFF;
+                font-size: 16px;
+            }
+        """)
+        filter_layout.addWidget(self.filter_input)
+
+        # Create the Apply Filter button
+        self.apply_filter_button = QPushButton("Apply Filter", self)
+        self.apply_filter_button.setStyleSheet("""
+            QPushButton {
+                border: 2px solid #555555;
+                border-radius: 15px;
+                padding: 10px;
+                background-color: #555555;
+                color: #FFFFFF;
+                font-size: 16px;
+            }
+            QPushButton:hover {
+                background-color: #777777;
+            }
+            QPushButton:pressed {
+                background-color: #444444;
+            }
+        """)
+        filter_layout.addWidget(self.apply_filter_button)
+
+        # Add the filter layout to the main layout
+        layout.addLayout(filter_layout)
+
         # Create a QTableWidget to display captured packets
         self.sniffer_table = QTableWidget(sniffer_tab)
         self.sniffer_table.setColumnCount(6)  # Number of columns 
-        self.sniffer_table.setHorizontalHeaderLabels(["Source IP", "Destination IP", "Protocol", "Length" , "Source Port" , "Destination Port"])
+        self.sniffer_table.setHorizontalHeaderLabels(["Source IP", "Destination IP", "Protocol", "Length", "Source Port", "Destination Port"])
 
         # Set column width to fit the table
         self.sniffer_table.horizontalHeader().setStretchLastSection(True)
@@ -273,7 +316,7 @@ class SnifferApp(QMainWindow):
 
         # Add the pause/resume button
         self.pause_button = QPushButton("Pause", self)
-        self.pause_button.setStyleSheet("font-size: 16px; padding: 10px; background-color: #555555; color: #FFFFFF;")
+        self.pause_button.setStyleSheet("font-size: 16px; padding: 10px; background-color: #555555; color: #FFFFFF; ")
         self.pause_button.clicked.connect(self.toggle_pause)
         layout.addWidget(self.pause_button)
 
@@ -282,6 +325,7 @@ class SnifferApp(QMainWindow):
 
         # Start the sniffing thread
         self.start_sniffing()
+
 
     def toggle_pause(self):
         if self.paused:
@@ -305,9 +349,10 @@ class SnifferApp(QMainWindow):
 
     def packet_handler(self, packet):
         if IP in packet:
+            self.sniffed_packets.append(packet)  # Store the packet
             src_ip = packet[IP].src
             dest_ip = packet[IP].dst
-            proto = IP_PROTOS.d[packet[IP].proto]
+            proto = IP_PROTOS.d.get(packet[IP].proto , "Unknown")
             length = len(packet)
             src_port = str(packet[proto.upper()].sport) if packet.haslayer(proto.upper()) else None 
             dst_port = str(packet[proto.upper()].dport) if packet.haslayer(proto.upper()) else None 
