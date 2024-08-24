@@ -1,6 +1,5 @@
 from scapy.all import *
 from scapy.layers.dot11 import Dot11Beacon
-import nmap
 import time
 import pywifi
 

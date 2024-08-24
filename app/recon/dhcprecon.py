@@ -1,6 +1,5 @@
-from scapy.all import conf, DHCP, IP, UDP, BOOTP, Ether, srp, get_if_list, getmacbyip
+from scapy.all import conf, DHCP, IP, UDP, BOOTP, Ether, srp
 
-# Ensure elevated permissions
 conf.checkIPaddr = False
 
 # Define the DHCP Discover packet
@@ -13,20 +12,15 @@ dhcp_discover = (
 )
 
 # Print debug information
-print("Sending DHCP Discover packet on interface:")
+print("Sending DHCP Discover packet...")
 
 # Send packet and capture responses
-ans, unans = srp(dhcp_discover, multi=True, timeout=5)
+ans, unans = srp(dhcp_discover, timeout=5)
 
 # Print the responses
 if ans:
-    for packet in ans:
+    for _, packet in ans:
         if packet and packet[1]:
             print("Response from:", packet[1][Ether].src, packet[1][IP].src)
 else:
     print("No DHCP responses received.")
-
-
-# class RogueDHCP:
-#     def __init__(self , ip ) -> None:
-#         self.__ip = ip

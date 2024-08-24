@@ -4,31 +4,29 @@ import pandas as pd
 import ipaddress
 
 class Scanner:
-    def __init__(self, MAC, IP) -> None:
+    def __init__(self, MAC, IP , subnet) -> None:
         self.__mac = MAC
         self.__ip = IP
-
-    def arp_scan(self, network_ip, subnet_mask, **kwargs):
+        self.__subnet = subnet
+        self.__network = ipaddress.ip_network(f'{self.__ip}/{self.__subnet}', strict=False)
+        self.__hosts = [str(ip) for ip in self.__network.hosts()]
+        
+    def arp_scan(self, **kwargs):
         try :
-            path = kwargs.get("csv" , "data/arp.csv")
             timeout = kwargs.get("timeout" , 1)
             data = []
-            network = ipaddress.ip_network(f'{network_ip}/{subnet_mask}', strict=False)
-            hosts = [str(ip) for ip in network.hosts()]
-            
-            for host in hosts:
+            for host in self.__hosts:
                 arp_request = Ether(src=self.__mac, dst='FF:FF:FF:FF:FF:FF') / ARP(op=1, hwsrc=self.__mac, pdst=host, psrc=self.__ip)
                 arp_response = srp(arp_request, timeout=timeout)[0]
                 for _, packet in arp_response:
-                    print(packet)
                     if packet and packet.haslayer(ARP) and packet[ARP].op == 2:  
                         data.append({
                             'IP Address': packet[ARP].psrc,
                             'MAC Address': packet[ARP].hwsrc
                         })
-                pd.DataFrame(data).to_csv(path, index=False)
+                return pd.DataFrame(data)
         except Exception as err :
-            print(err)
+            return None
 
     def tcp_syn_scan(self , dst_ip , **kwargs ):
         try:
@@ -103,7 +101,7 @@ class Scanner:
             ans,unans=traceroute(ip , dport=dport , timeout=timeout , verbose=False)
             router_ips = list(dict.fromkeys([rcv.src for snd, rcv in ans]))
 
-            print(router_ips)
+            return router_ips
         except Exception as err :
             return err
         

@@ -1,4 +1,4 @@
-from recon.host import Scanner
+from app.recon.host import Scanner
 
 scn = Scanner("D8:BB:C1:23:9D:8F" , "192.168.100.9")
 

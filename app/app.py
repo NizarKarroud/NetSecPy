@@ -3,10 +3,11 @@ import threading
 import psutil
 import socket
 import webbrowser
+from recon.host import Scanner
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QMenuBar,
     QAction, QStatusBar, QHBoxLayout, QFrame, QScrollArea, QRadioButton,
-    QButtonGroup, QPushButton, QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView , QLineEdit
+    QButtonGroup, QPushButton, QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView , QLineEdit , QStackedWidget , QGridLayout
 )
 from PyQt5.QtCore import Qt, QMetaObject, Q_ARG, pyqtSlot
 from scapy.all import sniff, IP , IP_PROTOS
@@ -23,10 +24,9 @@ class SnifferApp(QMainWindow):
         # Initialize pause attribute
         self.paused = False
 
-        # Set up the main window
         self.setWindowTitle("Windows Sniffer App")
         self.setGeometry(100, 100, 1024, 768)
-        self.setStyleSheet("background-color: #333333; color: #FFFFFF; font-family: Arial, sans-serif;")
+        self.setStyleSheet("background-color: #2A363B; color: #FFFFFF; font-family: Arial, sans-serif;")
 
         # Initialize the main layout
         self.central_widget = QWidget()
@@ -37,7 +37,7 @@ class SnifferApp(QMainWindow):
         # Create menu bar
         self.menu_bar = QMenuBar(self)
         self.setMenuBar(self.menu_bar)
-        self.menu_bar.setStyleSheet("background-color: #444444; color: #FFFFFF; padding: 5px;")
+        self.menu_bar.setStyleSheet("background-color: #2A363B; color: #FFFFFF; padding: 5px;border-bottom: 1px solid #000000;")
 
         # File Menu
         file_menu = self.menu_bar.addMenu("File")
@@ -65,7 +65,7 @@ class SnifferApp(QMainWindow):
         # Add Status Bar
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
-        self.status_bar.setStyleSheet("background-color: #444444; color: #FFFFFF; padding: 5px;")
+        self.status_bar.setStyleSheet("background-color: #2A363B; color: #FFFFFF; padding: 5px;")
 
         # Add header and next button layout
         self.setup_header()
@@ -84,7 +84,7 @@ class SnifferApp(QMainWindow):
 
         # Next Button
         self.next_button = QPushButton("Next →", self)
-        self.next_button.setStyleSheet("font-size: 16px; padding: 10px; background-color: #555555; color: #FFFFFF;")
+        self.next_button.setStyleSheet("font-size: 16px; padding: 10px; background-color: #E84A5F; color: #FFFFFF;")
         self.next_button.clicked.connect(self.go_to_next_page)
         self.next_button.setFixedSize(100, 40)
 
@@ -94,7 +94,6 @@ class SnifferApp(QMainWindow):
 
         # Add the header layout to the main layout
         self.main_layout.addLayout(header_layout)
-
     def setup_interface_list(self):
         # Create a scroll area for the interface list
         scroll_area = QScrollArea()
@@ -104,7 +103,7 @@ class SnifferApp(QMainWindow):
         scroll_area.setStyleSheet("""
             QScrollBar:vertical {
                 border: 1px solid #555555;
-                background: #333333;
+                background: #2A363B;
                 width: 12px;
             }
             QScrollBar::handle:vertical {
@@ -113,16 +112,16 @@ class SnifferApp(QMainWindow):
             }
             QScrollBar::add-line:vertical {
                 border: 1px solid #555555;
-                background: #333333;
+                background: #2A363B;
                 height: 0px;
             }
             QScrollBar::sub-line:vertical {
                 border: 1px solid #555555;
-                background: #333333;
+                background: #2A363B;
                 height: 0px;
             }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-                background: #333333;
+                background: #2A363B;
             }
         """)
 
@@ -139,9 +138,12 @@ class SnifferApp(QMainWindow):
 
         interfaces = psutil.net_if_addrs().items()
 
+        # Dictionary to store interface data
+        self.interface_data = {}
+
         for interface_name, interface_addresses in interfaces:
             interface_frame = QFrame()
-            interface_frame.setStyleSheet("background-color: #444444; border-radius: 10px; margin: 10px; padding: 10px;")
+            interface_frame.setStyleSheet("background-color: #202C31; border-radius: 10px; margin: 10px; padding: 10px;")
             interface_layout = QHBoxLayout(interface_frame)
 
             # Radio button to select interface
@@ -150,16 +152,29 @@ class SnifferApp(QMainWindow):
             self.interface_group.addButton(radio_button)
             interface_layout.addWidget(radio_button)
 
+            # Initialize data storage
+            ip_address = None
+            mac_address = None
+
             # IP and MAC address labels
             for address in interface_addresses:
                 if address.family == socket.AF_INET:
-                    ip_label = QLabel(f"IP: {address.address}", self)
+                    ip_address = address.address
+                    ip_label = QLabel(f"IP: {ip_address}", self)
                     ip_label.setStyleSheet("font-size: 16px; color: #AAAAAA; margin-left: 20px;")
                     interface_layout.addWidget(ip_label)
                 elif address.family == psutil.AF_LINK:
-                    mac_label = QLabel(f"MAC: {address.address}", self)
+                    mac_address = address.address
+                    mac_label = QLabel(f"MAC: {mac_address}", self)
                     mac_label.setStyleSheet("font-size: 16px; color: #AAAAAA; margin-left: 20px;")
                     interface_layout.addWidget(mac_label)
+
+            # Save the interface data
+            self.interface_data[interface_name] = {
+                'ip': ip_address,
+                'mac': mac_address,
+                'netmask' : address.netmask
+            }
 
             # Add the frame to the scrollable layout
             scroll_layout.addWidget(interface_frame)
@@ -172,8 +187,13 @@ class SnifferApp(QMainWindow):
         selected_button = self.interface_group.checkedButton()
         if selected_button:
             self.selected_interface = selected_button.text()
-            print(f"Selected Interface: {self.selected_interface}")
-            # Proceed to the next page
+            # Retrieve the IP and MAC for the selected interface
+            self.selected_ip = self.interface_data[self.selected_interface]['ip']
+            self.selected_mac = self.interface_data[self.selected_interface]['mac']
+            self.selected_subent = self.interface_data[self.selected_interface]['netmask']
+            
+            self.scanner = Scanner(self.selected_mac.replace("-",":"), self.selected_ip ,self.selected_subent ) 
+            # Proceed to the next page 
             self.show_next_page()
         else:
             self.status_bar.showMessage("Please select an interface before proceeding.")
@@ -190,17 +210,19 @@ class SnifferApp(QMainWindow):
         # Style the tabs
         self.tabs.setStyleSheet("""
             QTabBar::tab {
-                background: #008080;
+                background: #E84A5F;
                 color: #FFFFFF;
                 padding: 10px 30px;
+                border: 2px solid #555555;
+                border-radius: 1px;
                 font-size: 16px;
                 min-width: 150px;
             }
             QTabBar::tab:selected {
-                background: #663399;
+                background: #FF847C;
             }
             QTabBar::tab:hover {
-                background: #663399;
+                background: #FF847C;
             }
             QTabWidget::pane {
                 border: 1px solid #444444;
@@ -209,12 +231,15 @@ class SnifferApp(QMainWindow):
 
         # Create tabs for each section
         self.add_sniffer_tab()
-        self.add_tab("Recon", "#333333")
-        self.add_tab("Services", "#333333")
-        self.add_tab("Wireless", "#333333")
-        self.add_tab("Visualization", "#333333")
-        self.add_tab("Logs", "#333333")
-        self.add_tab("Packet Crafter ", "#333333")
+
+        self.recon_tab = ReconTab(scanner=self.scanner)
+        self.tabs.addTab(self.recon_tab, "Recon")
+        
+        self.add_tab("Services", "#2A363B")
+        self.add_tab("Wireless", "#2A363B")
+        self.add_tab("Visualization", "#2A363B")
+        self.add_tab("Logs", "#2A363B")
+        self.add_tab("Packet Crafter ", "#2A363B")
 
     def add_sniffer_tab(self):
         # Create a new QWidget for the Sniffer tab
@@ -232,7 +257,7 @@ class SnifferApp(QMainWindow):
                 border: 2px solid #555555;
                 border-radius: 15px;
                 padding: 10px;
-                background-color: #333333;
+                background-color: #2A363B;
                 color: #FFFFFF;
                 font-size: 16px;
             }
@@ -243,18 +268,18 @@ class SnifferApp(QMainWindow):
         self.apply_filter_button = QPushButton("Apply Filter", self)
         self.apply_filter_button.setStyleSheet("""
             QPushButton {
-                border: 2px solid #555555;
+                border: 2px solid #202C31;
                 border-radius: 15px;
                 padding: 10px;
-                background-color: #555555;
+                background-color: #202C31;
                 color: #FFFFFF;
                 font-size: 16px;
             }
             QPushButton:hover {
-                background-color: #777777;
+                background-color: #151D20 ;
             }
             QPushButton:pressed {
-                background-color: #444444;
+                background-color: #151D20;
             }
         """)
         filter_layout.addWidget(self.apply_filter_button)
@@ -274,7 +299,7 @@ class SnifferApp(QMainWindow):
         # Customize header color
         self.sniffer_table.horizontalHeader().setStyleSheet("""
             QHeaderView::section {
-                background-color: #50C878;
+                background-color: #99B898;
                 color: #FFFFFF;
                 padding: 5px;
                 border: 1px solid #444444;
@@ -282,7 +307,7 @@ class SnifferApp(QMainWindow):
         """)
         self.sniffer_table.verticalHeader().setStyleSheet("""
             QHeaderView::section {
-                background-color: #50C878;
+                background-color: #99B898;
                 color: #FFFFFF;
                 padding: 5px;
                 border: 1px solid #444444;
@@ -291,7 +316,7 @@ class SnifferApp(QMainWindow):
         self.sniffer_table.setStyleSheet("""
             QScrollBar:vertical {
                 border: 1px solid #555555;
-                background: #333333;
+                background: #2A363B;
                 width: 12px;
             }
             QScrollBar::handle:vertical {
@@ -300,23 +325,23 @@ class SnifferApp(QMainWindow):
             }
             QScrollBar::add-line:vertical {
                 border: 1px solid #555555;
-                background: #333333;
+                background: #2A363B;
                 height: 0px;
             }
             QScrollBar::sub-line:vertical {
                 border: 1px solid #555555;
-                background: #333333;
+                background: #2A363B;
                 height: 0px;
             }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-                background: #333333;
+                background: #2A363B;
             }
         """)    
         layout.addWidget(self.sniffer_table)
 
         # Add the pause/resume button
         self.pause_button = QPushButton("Pause", self)
-        self.pause_button.setStyleSheet("font-size: 16px; padding: 10px; background-color: #555555; color: #FFFFFF; ")
+        self.pause_button.setStyleSheet("font-size: 16px; padding: 10px; background-color: #202C31 ; color: #FFFFFF; ")
         self.pause_button.clicked.connect(self.toggle_pause)
         layout.addWidget(self.pause_button)
 
@@ -352,7 +377,7 @@ class SnifferApp(QMainWindow):
             self.sniffed_packets.append(packet)  # Store the packet
             src_ip = packet[IP].src
             dest_ip = packet[IP].dst
-            proto = IP_PROTOS.d.get(packet[IP].proto , "Unknown")
+            proto = IP_PROTOS.d.get(packet[IP].proto , f"{packet[IP].proto }")
             length = len(packet)
             src_port = str(packet[proto.upper()].sport) if packet.haslayer(proto.upper()) else None 
             dst_port = str(packet[proto.upper()].dport) if packet.haslayer(proto.upper()) else None 
@@ -392,6 +417,108 @@ class SnifferApp(QMainWindow):
 
     def open_documentation(self):
         webbrowser.open("https://your.documentation.url")
+
+
+class ReconTab(QWidget):
+    def __init__(self, scanner):
+        super().__init__()
+        self.scanner = scanner
+        self.initUI()
+
+    def initUI(self):
+        # Create widgets for each scan page
+        self.pages = {
+            'ARP Scan': self.create_scan_page('ARP Scan'),
+            'TCP SYN Scan': self.create_scan_page('TCP SYN Scan'),
+            'TCP ACK Scan': self.create_scan_page('TCP ACK Scan'),
+            'UDP Ping': self.create_scan_page('UDP Ping'),
+            'ICMP Scan': self.create_scan_page('ICMP Scan'),
+            'TCP Traceroute': self.create_scan_page('TCP Traceroute'),
+            'Idle Scan': self.create_scan_page('Idle Scan'),
+            'FIN Scan': self.create_scan_page('FIN Scan'),
+            'Null Scan': self.create_scan_page('Null Scan'),
+            'Xmas Scan': self.create_scan_page('Xmas Scan'),
+        }
+        
+        # Create a stacked widget for page transitions
+        self.stacked_widget = QStackedWidget()
+
+        # Create the main menu page
+        self.main_menu_page = self.create_main_menu_page()
+
+        # Add pages to stacked widget
+        self.stacked_widget.addWidget(self.main_menu_page)
+        for page_name, page_widget in self.pages.items():
+            self.stacked_widget.addWidget(page_widget)
+
+        # Create the main layout
+        layout = QVBoxLayout()
+        layout.addWidget(self.stacked_widget)
+        self.setLayout(layout)
+
+    def create_main_menu_page(self):
+        page = QWidget()
+        layout = QGridLayout(page)
+
+        button_names = [
+            "ARP Scan", "TCP SYN Scan", "TCP ACK Scan", "UDP Ping",
+            "ICMP Scan", "TCP Traceroute",  "Idle Scan", "FIN Scan", 
+            "Null Scan", "Xmas Scan"
+        ]
+
+        positions = [(i, j) for i in range(3) for j in range(4)]
+
+        for pos, name in zip(positions, button_names):
+            button = QPushButton(name)
+            button.setFixedSize(150, 150)  # Larger button size
+            button.setStyleSheet("""
+            QPushButton {
+                background-color: #4B3E4D  ;
+                border-radius: 0px;
+                color: white;
+                font-size: 16px;
+                padding: 10px;
+            }
+            QPushButton:hover {
+                background-color: #CC527A;
+            }
+            QPushButton:pressed {
+                background-color: #CC527A;
+            }
+        """)
+            button.clicked.connect(lambda _, n=name: self.switch_page(n))
+            layout.addWidget(button, *pos)
+
+        return page
+
+    def create_scan_page(self, scan_name):
+        """Create a page for each scan type with relevant content."""
+        page = QWidget()
+        page_layout = QVBoxLayout()
+
+        # Add a back button to return to the main menu
+        back_button = QPushButton("Back to Menu")
+        back_button.setStyleSheet("""
+            QPushButton {
+                background-color: #202C31  ; }""")
+        back_button.clicked.connect(self.show_main_menu)
+        page_layout.addWidget(back_button)
+
+        page.setLayout(page_layout)
+        return page
+
+    def switch_page(self, page_name):
+        """Switch to the selected page."""
+        if page_name in self.pages:
+            index = self.stacked_widget.indexOf(self.pages[page_name])
+            if index != -1:
+                self.stacked_widget.setCurrentIndex(index)
+
+    def show_main_menu(self):
+        """Show the main menu page."""
+        index = self.stacked_widget.indexOf(self.main_menu_page)
+        if index != -1:
+            self.stacked_widget.setCurrentIndex(index)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
