@@ -1,5 +1,4 @@
 import sys
-import threading
 import psutil
 import socket
 import webbrowser
@@ -10,10 +9,12 @@ from PyQt5.QtWidgets import (
     QButtonGroup, QPushButton, QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView , QLineEdit , QStackedWidget , QGridLayout
 )
 from PyQt5.QtCore import Qt, QMetaObject, Q_ARG, pyqtSlot
-from scapy.all import sniff, IP , IP_PROTOS ,  wrpcap, rdpcap
+from scapy.all import AsyncSniffer, IP , IP_PROTOS ,  wrpcap, rdpcap , sniff
 from scapy.plist import PacketList
 from PyQt5.QtGui import QIcon
 import os
+from scapy.config import conf
+conf.use_pcap = True 
 
 class SnifferApp(QMainWindow):
     def __init__(self):
@@ -287,6 +288,8 @@ class SnifferApp(QMainWindow):
         """)
         filter_layout.addWidget(self.apply_filter_button)
 
+        self.apply_filter_button.clicked.connect(lambda : self.apply_filters(self.filter_input.text()))
+
         # Add the filter layout to the main layout
         layout.addLayout(filter_layout)
 
@@ -352,7 +355,7 @@ class SnifferApp(QMainWindow):
         self.tabs.addTab(sniffer_tab, "Sniffer")
 
         # Start the sniffing thread
-        self.start_sniffing()
+        self.sniff_packets()
 
     def toggle_pause(self):
         if self.paused:
@@ -367,12 +370,13 @@ class SnifferApp(QMainWindow):
         tab.setStyleSheet(f"background-color: {color};")
         self.tabs.addTab(tab, title)
 
-    def start_sniffing(self):
-        sniff_thread = threading.Thread(target=self.sniff_packets, daemon=True)
-        sniff_thread.start()
-
-    def sniff_packets(self):
-        sniff(iface=self.selected_interface, prn=self.packet_handler, store=False)
+    def sniff_packets(self , filter = None):
+        if filter: 
+            self.sniff_instance = AsyncSniffer(iface=self.selected_interface,filter = filter , prn=self.packet_handler)
+            self.sniff_instance.start()
+        else:
+            self.sniff_instance = AsyncSniffer(iface=self.selected_interface, prn=self.packet_handler)
+            self.sniff_instance.start()
 
     def packet_handler(self, packet):
         if IP in packet:
@@ -394,6 +398,36 @@ class SnifferApp(QMainWindow):
                 Q_ARG(str, src_port),
                 Q_ARG(str, dst_port)
             )
+
+    def apply_filters(self, filter):
+        if filter :
+            self.sniff_instance.stop()
+
+            wrpcap('temp.pcap', self.sniffed_packets)
+            self.filtered_packets = sniff(offline='temp.pcap', filter=filter)
+            self.sniffer_table.setRowCount(0)
+            if IP in self.filtered_packets:
+                src_ip = self.filtered_packets[IP].src
+                dest_ip = self.filtered_packets[IP].dst
+                proto = IP_PROTOS.d.get(self.filtered_packets[IP].proto , f"{self.filtered_packets[IP].proto }")
+                length = len(self.filtered_packets)
+                src_port = str(self.filtered_packets[proto.upper()].sport) if self.filtered_packets.haslayer(proto.upper()) else None 
+                dst_port = str(self.filtered_packets[proto.upper()].dport) if self.filtered_packets.haslayer(proto.upper()) else None 
+                QMetaObject.invokeMethod(
+                    self, "update_table",
+                    Qt.QueuedConnection,
+                    Q_ARG(str, src_ip),
+                    Q_ARG(str, dest_ip),
+                    Q_ARG(str, str(proto)),
+                    Q_ARG(str, str(length)),
+                    Q_ARG(str, src_port),
+                    Q_ARG(str, dst_port)
+                )
+            os.remove('temp.pcap')
+            self.sniff_packets(filter=filter)
+        else :
+            self.sniff_instance.stop()
+            self.sniff_packets()
 
 
     @pyqtSlot(str, str, str, str , str , str)
@@ -419,7 +453,6 @@ class SnifferApp(QMainWindow):
 
     def open_documentation(self):
         webbrowser.open("https://your.documentation.url")
-
 
 
 class ReconTab(QWidget):
