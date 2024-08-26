@@ -10,8 +10,10 @@ from PyQt5.QtWidgets import (
     QButtonGroup, QPushButton, QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView , QLineEdit , QStackedWidget , QGridLayout
 )
 from PyQt5.QtCore import Qt, QMetaObject, Q_ARG, pyqtSlot
-from scapy.all import sniff, IP , IP_PROTOS
+from scapy.all import sniff, IP , IP_PROTOS ,  wrpcap, rdpcap
 from scapy.plist import PacketList
+from PyQt5.QtGui import QIcon
+import os
 
 class SnifferApp(QMainWindow):
     def __init__(self):
@@ -94,6 +96,7 @@ class SnifferApp(QMainWindow):
 
         # Add the header layout to the main layout
         self.main_layout.addLayout(header_layout)
+    
     def setup_interface_list(self):
         # Create a scroll area for the interface list
         scroll_area = QScrollArea()
@@ -351,7 +354,6 @@ class SnifferApp(QMainWindow):
         # Start the sniffing thread
         self.start_sniffing()
 
-
     def toggle_pause(self):
         if self.paused:
             self.paused = False
@@ -393,6 +395,7 @@ class SnifferApp(QMainWindow):
                 Q_ARG(str, dst_port)
             )
 
+
     @pyqtSlot(str, str, str, str , str , str)
     def update_table(self, src_ip, dest_ip, proto, length , src_port , dst_port):
         if not self.paused:
@@ -405,7 +408,6 @@ class SnifferApp(QMainWindow):
             self.sniffer_table.setItem(row_position, 4, QTableWidgetItem(src_port))
             self.sniffer_table.setItem(row_position, 5, QTableWidgetItem(dst_port))
 
-
     def open_file(self):
         pass  # Placeholder for file open functionality
 
@@ -417,6 +419,7 @@ class SnifferApp(QMainWindow):
 
     def open_documentation(self):
         webbrowser.open("https://your.documentation.url")
+
 
 
 class ReconTab(QWidget):
@@ -522,6 +525,8 @@ class ReconTab(QWidget):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon('netsec.ico'))
+
     sniffer_app = SnifferApp()
     sniffer_app.show()
     sys.exit(app.exec_())
