@@ -13,8 +13,8 @@ from scapy.all import AsyncSniffer, IP , IP_PROTOS ,  wrpcap, rdpcap , sniff
 from scapy.plist import PacketList
 from PyQt5.QtGui import QIcon
 import os
-from scapy.config import conf
-conf.use_pcap = True 
+import pyshark
+
 
 class SnifferApp(QMainWindow):
     def __init__(self):
@@ -360,9 +360,11 @@ class SnifferApp(QMainWindow):
     def toggle_pause(self):
         if self.paused:
             self.paused = False
+            self.sniff_instance.start()
             self.pause_button.setText("Pause")
         else:
             self.paused = True
+            self.sniff_instance.stop()
             self.pause_button.setText("Resume")
 
     def add_tab(self, title, color):
@@ -401,32 +403,40 @@ class SnifferApp(QMainWindow):
 
     def apply_filters(self, filter):
         if filter :
-            self.sniff_instance.stop()
-
+            filter = filter.strip()
+            try : 
+                self.sniff_instance.stop()
+            except Exception as err :
+                pass
             wrpcap('temp.pcap', self.sniffed_packets)
-            self.filtered_packets = sniff(offline='temp.pcap', filter=filter)
+            self.filtered_packets = [packet for packet in pyshark.FileCapture('temp.pcap', display_filter=filter) ]
+            print(self.filtered_packets)
             self.sniffer_table.setRowCount(0)
-            if IP in self.filtered_packets:
-                src_ip = self.filtered_packets[IP].src
-                dest_ip = self.filtered_packets[IP].dst
-                proto = IP_PROTOS.d.get(self.filtered_packets[IP].proto , f"{self.filtered_packets[IP].proto }")
-                length = len(self.filtered_packets)
-                src_port = str(self.filtered_packets[proto.upper()].sport) if self.filtered_packets.haslayer(proto.upper()) else None 
-                dst_port = str(self.filtered_packets[proto.upper()].dport) if self.filtered_packets.haslayer(proto.upper()) else None 
-                QMetaObject.invokeMethod(
-                    self, "update_table",
-                    Qt.QueuedConnection,
-                    Q_ARG(str, src_ip),
-                    Q_ARG(str, dest_ip),
-                    Q_ARG(str, str(proto)),
-                    Q_ARG(str, str(length)),
-                    Q_ARG(str, src_port),
-                    Q_ARG(str, dst_port)
-                )
+            for filtered_packet in self.filtered_packets :
+                if 'IP' in filtered_packet:
+                    src_ip = filtered_packet.ip.src
+                    dest_ip = filtered_packet.ip.dst
+                    proto = IP_PROTOS.d.get(int(filtered_packet.ip.proto) , f"{filtered_packet.ip.proto}")
+                    length = len(filtered_packet)
+                    src_port = str(getattr(filtered_packet, proto).srcport) if  hasattr(filtered_packet, proto) else None 
+                    dst_port = str(getattr(filtered_packet, proto).dstport) if  hasattr(filtered_packet, proto) else None 
+                    QMetaObject.invokeMethod(
+                        self, "update_table",
+                        Qt.QueuedConnection,
+                        Q_ARG(str, src_ip),
+                        Q_ARG(str, dest_ip),
+                        Q_ARG(str, str(proto)),
+                        Q_ARG(str, str(length)),
+                        Q_ARG(str, src_port),
+                        Q_ARG(str, dst_port)
+                    )
             os.remove('temp.pcap')
             self.sniff_packets(filter=filter)
         else :
-            self.sniff_instance.stop()
+            try : 
+                self.sniff_instance.stop()
+            except Exception as err :
+                pass
             self.sniff_packets()
 
 
