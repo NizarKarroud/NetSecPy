@@ -377,7 +377,7 @@ class SnifferApp(QMainWindow):
     def sniff_packets(self , filter = None):
         if filter: 
             self.pyshark_sniffer = pyshark.LiveCapture(interface=self.selected_interface,display_filter = filter)
-            self.sniff_instance = threading.Thread(target=self.pyshark_sniffer.apply_on_packets(self.pyshark_packet_handler))
+            self.sniff_instance = threading.Thread(target=lambda : self.pyshark_sniffer.apply_on_packets(self.pyshark_packet_handler))
             self.sniff_instance.start()
 
         else:
