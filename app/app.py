@@ -410,8 +410,25 @@ class SnifferApp(QMainWindow):
             dest_ip = packet.ip.dst
             proto = IP_PROTOS.d.get(int(packet.ip.proto) , f"{packet.ip.proto}")
             length = len(packet)
-            src_port = str(getattr(packet, proto).srcport) if  hasattr(packet, proto) else None 
-            dst_port = str(getattr(packet, proto).dstport) if  hasattr(packet, proto) else None 
+            
+            try:
+                # Check if the protocol exists in the packet
+                if hasattr(packet, proto):
+                    layer = getattr(packet, proto)
+                    
+                    # Safely get srcport and dstport if they exist
+                    src_port = str(getattr(layer, 'srcport', None)) if hasattr(layer, 'srcport') else None
+                    dst_port = str(getattr(layer, 'dstport', None)) if hasattr(layer, 'dstport') else None
+
+                else:
+                    print(f"Protocol {proto} not found in packet.")
+                    src_port = None
+                    dst_port = None
+
+            except Exception as e:
+                src_port = None
+                dst_port = None
+
         # Use a signal-slot mechanism to update the table from the main thread
             QMetaObject.invokeMethod(
                 self, "update_table",
