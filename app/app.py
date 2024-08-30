@@ -1,26 +1,56 @@
-import sys
-import psutil
-import socket
-import webbrowser
+import csv , os , asyncio , pyshark , socket , webbrowser , psutil , sys
 from recon.host import Scanner
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QMenuBar,
     QAction, QStatusBar, QHBoxLayout, QFrame, QScrollArea, QRadioButton,
-    QButtonGroup, QPushButton, QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView , QLineEdit , QStackedWidget , QGridLayout
+    QButtonGroup, QPushButton, QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView , QLineEdit , QStackedWidget , QGridLayout , QFileDialog
 )
-from PyQt5.QtCore import Qt, QMetaObject, Q_ARG, pyqtSlot
-from scapy.all import AsyncSniffer, IP , IP_PROTOS ,  wrpcap, rdpcap , sniff
-from scapy.plist import PacketList
+from PyQt5.QtCore import Qt, QMetaObject, Q_ARG, pyqtSlot ,  QThread, pyqtSignal
+from scapy.all import  IP_PROTOS 
 from PyQt5.QtGui import QIcon
-import os
-import pyshark
-import threading
+from PyQt5.QtCore import QThread, pyqtSignal , QFile
+
+class SnifferThread(QThread):
+    packet_received = pyqtSignal(object)
+
+    def __init__(self, interface, filter=None):
+        super().__init__()
+        self.interface = interface
+        self.filter = filter
+        self.stop_sniffing = False
+
+    def run(self):
+        # Create and set up an asyncio event loop in this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        if self.filter:
+            self.sniffer = pyshark.LiveCapture(interface=self.interface, display_filter=self.filter)
+        else:
+            self.sniffer = pyshark.LiveCapture(interface=self.interface, output_file="temp.pcap")
+        
+        try:
+            for packet in self.sniffer.sniff_continuously():
+                if self.stop_sniffing:
+                    break
+                self.packet_received.emit(packet)
+        except Exception as e:
+            pass
+        finally:
+            loop.close()  # Close the event loop when done
+
+    def stop(self):
+        self.stop_sniffing = True
+        if self.sniffer:
+            self.sniffer.close()
+        self.wait()  # Ensure the thread has finished
+
 
 class SnifferApp(QMainWindow):
     def __init__(self):
         super().__init__()
         
-        self.stop_sniffing = threading.Event()  # Create an Event object for stopping pyshark sniffer
+        self.sniffer_thread = None
 
         # Initialize selected interface variable
         self.selected_interface = None
@@ -289,7 +319,7 @@ class SnifferApp(QMainWindow):
         """)
         filter_layout.addWidget(self.apply_filter_button)
 
-        self.apply_filter_button.clicked.connect(lambda : self.apply_filters(self.filter_input.text()))
+        self.apply_filter_button.clicked.connect(self.apply_filters)
 
         # Add the filter layout to the main layout
         layout.addLayout(filter_layout)
@@ -356,16 +386,16 @@ class SnifferApp(QMainWindow):
         self.tabs.addTab(sniffer_tab, "Sniffer")
 
         # Start the sniffing thread
-        self.sniff_packets()
+        self.start_sniffing()
 
     def toggle_pause(self):
         if self.paused:
             self.paused = False
-            self.sniff_packets(self.filter_input.text())
+            self.start_sniffing()
             self.pause_button.setText("Pause")
         else:
             self.paused = True
-            self.stop()
+            self.sniffer_thread.stop()
             self.pause_button.setText("Resume")
 
     def add_tab(self, title, color):
@@ -373,25 +403,15 @@ class SnifferApp(QMainWindow):
         tab.setStyleSheet(f"background-color: {color};")
         self.tabs.addTab(tab, title)
 
-    def sniff_packets(self , filter = None):
-        self.stop_sniffing.clear() 
-        if filter: 
-            self.pyshark_sniffer = pyshark.LiveCapture(interface=self.selected_interface, display_filter=filter )
-        else:
+    def start_sniffing(self):
+        if self.sniffer_thread:
+            self.sniffer_thread.stop()
+            self.sniffer_thread.wait()
 
-            self.pyshark_sniffer = pyshark.LiveCapture(interface=self.selected_interface, output_file="temp.pcap")
-
-        self.sniff_instance = threading.Thread(target=self.sniffing_thread)
-        self.sniff_instance.start()
-
-    def sniffing_thread(self):
-        try:
-            for packet in self.pyshark_sniffer.sniff_continuously():
-                if self.stop_sniffing.is_set():
-                    break
-                self.pyshark_packet_handler(packet)
-        except Exception as e:
-            print(f"Sniffing thread encountered an error: {e}")
+        filter = self.filter_input.text()
+        self.sniffer_thread = SnifferThread(self.selected_interface, filter)
+        self.sniffer_thread.packet_received.connect(self.pyshark_packet_handler)
+        self.sniffer_thread.start()
 
     def pyshark_packet_handler(self , packet):
         if 'IP' in packet:
@@ -410,7 +430,6 @@ class SnifferApp(QMainWindow):
                     dst_port = str(getattr(layer, 'dstport', None)) if hasattr(layer, 'dstport') else None
 
                 else:
-                    print(f"Protocol {proto} not found in packet.")
                     src_port = None
                     dst_port = None
 
@@ -430,39 +449,15 @@ class SnifferApp(QMainWindow):
                 Q_ARG(str, dst_port)
             )
 
-    def apply_filters(self, filter):
-        if filter :
-            filter = filter.strip()
-            try : 
-                self.stop()
-            except Exception  :
-                pass
-
+    def apply_filters(self):
+            self.sniffer_thread.stop()
+            self.sniffer_thread.wait()
             self.sniffer_table.setRowCount(0)
-            self.filtered_packets = []
-            self.filtered_packets = [packet for packet in pyshark.FileCapture('temp.pcap', display_filter=filter) ]
-            print(self.filtered_packets)
-            for filtered_packet in self.filtered_packets :
-                self.pyshark_packet_handler(filtered_packet)
-            self.sniff_packets(filter=filter)
-        else :
-            try : 
-                self.stop()
-            except Exception :
-                pass
-            self.sniff_packets()
-
-    def stop(self):
-        self.stop_sniffing.set()  # Signal the thread to stop
-        if self.pyshark_sniffer:
-            # Ensure the capture is closed properly
-            try:
-                self.pyshark_sniffer.close()
-            except Exception as e:
-                print(f"Error closing capture: {e}")
-            self.pyshark_sniffer = None  # Clear the reference
-        if self.sniff_instance.is_alive():
-            self.sniff_instance.join(timeout=2)  # Wait for thread to finish
+            if self.filter_input.text() :
+                self.filtered_packets = [packet for packet in pyshark.FileCapture('temp.pcap', display_filter=self.filter_input.text()) ]
+                for filtered_packet in self.filtered_packets :
+                    self.pyshark_packet_handler(filtered_packet)
+            self.start_sniffing()
 
 
     @pyqtSlot(str, str, str, str , str , str)
@@ -481,14 +476,32 @@ class SnifferApp(QMainWindow):
         pass  # Placeholder for file open functionality
 
     def export_as_csv(self):
-        pass  # Placeholder for export as CSV functionality
-
+        file_name, _ = QFileDialog.getSaveFileName(self, "Save CSV File", "", "CSV Files (*.csv)")
+        if file_name:
+            with open(file_name, 'w', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerow(["Source IP", "Destination IP", "Protocol", "Length", "Source Port", "Destination Port"])
+                for row in range(self.sniffer_table.rowCount()):
+                    row_data = [self.sniffer_table.item(row, col).text() for col in range(self.sniffer_table.columnCount())]
+                    writer.writerow(row_data)
     def export_as_json(self):
         pass  # Placeholder for export as JSON functionality
 
     def open_documentation(self):
         webbrowser.open("https://your.documentation.url")
 
+
+    def closeEvent(self, event):
+        if self.sniffer_thread and self.sniffer_thread.isRunning():
+            self.sniffer_thread.stop()
+        
+        # Delete the .pcap file if it exists
+        pcap_file = "temp.pcap"
+        if os.path.exists(pcap_file):
+            os.remove(pcap_file)
+        
+        # Call the base class implementation
+        event.accept()
 
 class ReconTab(QWidget):
     def __init__(self, scanner):
