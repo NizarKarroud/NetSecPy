@@ -19,7 +19,6 @@ import threading
 class SnifferApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.sniffed_packets = PacketList()  # To store sniffed packets
         
         self.stop_sniffing = threading.Event()  # Create an Event object for stopping pyshark sniffer
 
@@ -362,7 +361,7 @@ class SnifferApp(QMainWindow):
     def toggle_pause(self):
         if self.paused:
             self.paused = False
-            self.sniff_instance.start()
+            self.sniff_packets(self.filter_input.text())
             self.pause_button.setText("Pause")
         else:
             self.paused = True
@@ -375,34 +374,24 @@ class SnifferApp(QMainWindow):
         self.tabs.addTab(tab, title)
 
     def sniff_packets(self , filter = None):
+        self.stop_sniffing.clear() 
         if filter: 
-            self.pyshark_sniffer = pyshark.LiveCapture(interface=self.selected_interface,display_filter = filter)
-            self.sniff_instance = threading.Thread(target=lambda : self.pyshark_sniffer.apply_on_packets(self.pyshark_packet_handler))
-            self.sniff_instance.start()
-
+            self.pyshark_sniffer = pyshark.LiveCapture(interface=self.selected_interface, display_filter=filter )
         else:
-            self.sniff_instance = AsyncSniffer(iface=self.selected_interface, prn=self.packet_handler)
-            self.sniff_instance.start()
 
-    def packet_handler(self, packet):
-        if IP in packet:
-            self.sniffed_packets.append(packet)  # Store the packet
-            src_ip = packet[IP].src
-            dest_ip = packet[IP].dst
-            proto = IP_PROTOS.d.get(packet[IP].proto , f"{packet[IP].proto }")
-            length = len(packet)
-            src_port = str(packet[proto.upper()].sport) if packet.haslayer(proto.upper()) else None 
-            dst_port = str(packet[proto.upper()].dport) if packet.haslayer(proto.upper()) else None 
-            QMetaObject.invokeMethod(
-                self, "update_table",
-                Qt.QueuedConnection,
-                Q_ARG(str, src_ip),
-                Q_ARG(str, dest_ip),
-                Q_ARG(str, str(proto)),
-                Q_ARG(str, str(length)),
-                Q_ARG(str, src_port),
-                Q_ARG(str, dst_port)
-            )
+            self.pyshark_sniffer = pyshark.LiveCapture(interface=self.selected_interface, output_file="temp.pcap")
+
+        self.sniff_instance = threading.Thread(target=self.sniffing_thread)
+        self.sniff_instance.start()
+
+    def sniffing_thread(self):
+        try:
+            for packet in self.pyshark_sniffer.sniff_continuously():
+                if self.stop_sniffing.is_set():
+                    break
+                self.pyshark_packet_handler(packet)
+        except Exception as e:
+            print(f"Sniffing thread encountered an error: {e}")
 
     def pyshark_packet_handler(self , packet):
         if 'IP' in packet:
@@ -446,45 +435,35 @@ class SnifferApp(QMainWindow):
             filter = filter.strip()
             try : 
                 self.stop()
-            except Exception as err :
+            except Exception  :
                 pass
-            wrpcap('temp.pcap', self.sniffed_packets)
-            self.filtered_packets = [packet for packet in pyshark.FileCapture('temp.pcap', display_filter=filter) ]
+
             self.sniffer_table.setRowCount(0)
+            self.filtered_packets = []
+            self.filtered_packets = [packet for packet in pyshark.FileCapture('temp.pcap', display_filter=filter) ]
+            print(self.filtered_packets)
             for filtered_packet in self.filtered_packets :
-                if 'IP' in filtered_packet:
-                    src_ip = filtered_packet.ip.src
-                    dest_ip = filtered_packet.ip.dst
-                    proto = IP_PROTOS.d.get(int(filtered_packet.ip.proto) , f"{filtered_packet.ip.proto}")
-                    length = len(filtered_packet)
-                    src_port = str(getattr(filtered_packet, proto).srcport) if  hasattr(filtered_packet, proto) else None 
-                    dst_port = str(getattr(filtered_packet, proto).dstport) if  hasattr(filtered_packet, proto) else None 
-                # Use a signal-slot mechanism to update the table from the main thread
-                    QMetaObject.invokeMethod(
-                        self, "update_table",
-                        Qt.QueuedConnection,
-                        Q_ARG(str, src_ip),
-                        Q_ARG(str, dest_ip),
-                        Q_ARG(str, str(proto)),
-                        Q_ARG(str, str(length)),
-                        Q_ARG(str, src_port),
-                        Q_ARG(str, dst_port)
-                    )
-            os.remove('temp.pcap')
+                self.pyshark_packet_handler(filtered_packet)
             self.sniff_packets(filter=filter)
         else :
             try : 
                 self.stop()
-            except Exception as err :
+            except Exception :
                 pass
             self.sniff_packets()
 
     def stop(self):
-        if isinstance(self.sniff_instance , threading.Thread):
-            self.stop_sniffing.set()  # Signal the thread to stop
-            self.sniff_instance.join()  # Wait for the thread to finish
-        else :
-            self.sniff_instance.stop()
+        self.stop_sniffing.set()  # Signal the thread to stop
+        if self.pyshark_sniffer:
+            # Ensure the capture is closed properly
+            try:
+                self.pyshark_sniffer.close()
+            except Exception as e:
+                print(f"Error closing capture: {e}")
+            self.pyshark_sniffer = None  # Clear the reference
+        if self.sniff_instance.is_alive():
+            self.sniff_instance.join(timeout=2)  # Wait for thread to finish
+
 
     @pyqtSlot(str, str, str, str , str , str)
     def update_table(self, src_ip, dest_ip, proto, length , src_port , dst_port):
