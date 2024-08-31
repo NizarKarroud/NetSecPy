@@ -1,4 +1,4 @@
-import csv , os , asyncio , pyshark , socket , webbrowser , psutil , sys , re
+import csv , os , asyncio , pyshark , socket , webbrowser , psutil , sys , re , json
 from recon.host import Scanner
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QMenuBar,
@@ -538,11 +538,35 @@ class SnifferApp(QMainWindow):
                 writer = csv.writer(file)
                 writer.writerow(["Source IP", "Destination IP", "Protocol", "Length", "Source Port", "Destination Port"])
                 for row in range(self.sniffer_table.rowCount()):
-                    row_data = [self.sniffer_table.item(row, col).text() for col in range(self.sniffer_table.columnCount())]
+                    row_data = [self.sniffer_table.item(row, col).text()for col in range(0,6)]
                     writer.writerow(row_data)
     def export_as_json(self):
-        pass  # Placeholder for export as JSON functionality
-
+        # Open a file dialog to choose where to save the JSON file
+        file_name, _ = QFileDialog.getSaveFileName(self, "Save JSON File", "", "JSON Files (*.json)")
+        
+        if file_name:
+            data = []
+            # Iterate over each row in the table
+            for row in range(self.sniffer_table.rowCount()):
+                row_data = {}
+                for col in range(6):
+                    item = self.sniffer_table.item(row, col)
+                    
+                    # Check if item is valid and a QTableWidgetItem
+                    if isinstance(item, QTableWidgetItem):
+                        header = self.sniffer_table.horizontalHeaderItem(col).text()  # Get the column header
+                        row_data[header] = item.text()
+                    else:
+                        header = self.sniffer_table.horizontalHeaderItem(col).text()  # Get the column header
+                        row_data[header] = ""
+                
+                # Add the row data to the list
+                data.append(row_data)
+            
+            # Write the data to a JSON file
+            with open(file_name, 'w', newline='') as file:
+                json.dump(data, file, indent=4)
+                
     def open_documentation(self):
         webbrowser.open("https://your.documentation.url")
 
