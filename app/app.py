@@ -1,9 +1,10 @@
-import csv , os , asyncio , pyshark , socket , webbrowser , psutil , sys
+import csv , os , asyncio , pyshark , socket , webbrowser , psutil , sys , re
 from recon.host import Scanner
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QMenuBar,
     QAction, QStatusBar, QHBoxLayout, QFrame, QScrollArea, QRadioButton,
     QButtonGroup, QPushButton, QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView , QLineEdit , QStackedWidget , QGridLayout , QFileDialog
+    , QDialog , QTextEdit
 )
 from PyQt5.QtCore import Qt, QMetaObject, Q_ARG, pyqtSlot ,  QThread, pyqtSignal
 from scapy.all import  IP_PROTOS 
@@ -45,6 +46,36 @@ class SnifferThread(QThread):
             self.sniffer.close()
         self.wait()  # Ensure the thread has finished
 
+class PacketDetailsWindow(QDialog):
+    def __init__(self, packet, parent=None):
+        super(PacketDetailsWindow, self).__init__(parent)
+
+        self.setWindowTitle("Packet Details")
+        self.setGeometry(100, 100, 1024, 768)
+
+        # Create a layout
+        layout = QVBoxLayout()
+
+        # Create a QTextEdit widget to display packet details
+        self.packet_text = QTextEdit(self)
+        self.packet_text.setReadOnly(True)
+
+        # Format the packet details
+        formatted_packet = self.format_packet(str(packet))
+        
+        # Add the formatted packet details to the QTextEdit
+        self.packet_text.setPlainText(formatted_packet)
+
+        # Add the QTextEdit to the layout
+        layout.addWidget(self.packet_text)
+
+        # Set the layout for the dialog
+        self.setLayout(layout)
+
+    def format_packet(self, packet_str):
+        # Remove ANSI escape codes
+        ansi_escape = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]')
+        return ansi_escape.sub('', packet_str)
 
 class SnifferApp(QMainWindow):
     def __init__(self):
@@ -273,7 +304,6 @@ class SnifferApp(QMainWindow):
         self.add_tab("Services", "#2A363B")
         self.add_tab("Wireless", "#2A363B")
         self.add_tab("Visualization", "#2A363B")
-        self.add_tab("Logs", "#2A363B")
         self.add_tab("Packet Crafter ", "#2A363B")
 
     def add_sniffer_tab(self):
@@ -326,8 +356,8 @@ class SnifferApp(QMainWindow):
 
         # Create a QTableWidget to display captured packets
         self.sniffer_table = QTableWidget(sniffer_tab)
-        self.sniffer_table.setColumnCount(6)  # Number of columns 
-        self.sniffer_table.setHorizontalHeaderLabels(["Source IP", "Destination IP", "Protocol", "Length", "Source Port", "Destination Port"])
+        self.sniffer_table.setColumnCount(7) 
+        self.sniffer_table.setHorizontalHeaderLabels(["Source IP", "Destination IP", "Protocol", "Length", "Source Port", "Destination Port","More Info"])
 
         # Set column width to fit the table
         self.sniffer_table.horizontalHeader().setStretchLastSection(True)
@@ -446,7 +476,8 @@ class SnifferApp(QMainWindow):
                 Q_ARG(str, str(proto)),
                 Q_ARG(str, str(length)),
                 Q_ARG(str, src_port),
-                Q_ARG(str, dst_port)
+                Q_ARG(str, dst_port),
+                Q_ARG(object, packet)  # Pass the entire packet object
             )
 
     def apply_filters(self):
@@ -460,8 +491,8 @@ class SnifferApp(QMainWindow):
             self.start_sniffing()
 
 
-    @pyqtSlot(str, str, str, str , str , str)
-    def update_table(self, src_ip, dest_ip, proto, length , src_port , dst_port):
+    @pyqtSlot(str, str, str, str , str , str , object)
+    def update_table(self, src_ip, dest_ip, proto, length , src_port , dst_port , packet):
         if not self.paused:
             row_position = self.sniffer_table.rowCount()
             self.sniffer_table.insertRow(row_position)
@@ -471,6 +502,31 @@ class SnifferApp(QMainWindow):
             self.sniffer_table.setItem(row_position, 3, QTableWidgetItem(length))
             self.sniffer_table.setItem(row_position, 4, QTableWidgetItem(src_port))
             self.sniffer_table.setItem(row_position, 5, QTableWidgetItem(dst_port))
+
+            more_info_button = QPushButton("More Info")
+            more_info_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #202C31;
+                    color: #FFFFFF;
+                    font-size: 14px;
+                    padding: 5px;
+                    border-radius: 5px;
+                }
+                QPushButton:hover {
+                    background-color: #151D20;
+                }
+                QPushButton:pressed {
+                    background-color: #0F1416;
+                }
+            """)
+            more_info_button.clicked.connect(lambda : self.show_packet(packet))
+
+            # Set the button in the "More Info" column
+            self.sniffer_table.setCellWidget(row_position, 6, more_info_button)
+
+    def show_packet(self,packet):
+        details_window = PacketDetailsWindow(packet,self)
+        details_window.exec_()  
 
     def open_file(self):
         pass  # Placeholder for file open functionality
