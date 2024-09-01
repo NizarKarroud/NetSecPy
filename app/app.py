@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QMenuBar,
     QAction, QStatusBar, QHBoxLayout, QFrame, QScrollArea, QRadioButton,
     QButtonGroup, QPushButton, QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView , QLineEdit , QStackedWidget , QGridLayout , QFileDialog
-    , QDialog , QTextEdit
+    , QDialog , QTextEdit , QToolBox
 )
 from PyQt5.QtCore import Qt, QMetaObject, Q_ARG, pyqtSlot ,  QThread, pyqtSignal
 from scapy.all import  IP_PROTOS 
@@ -46,6 +46,7 @@ class SnifferThread(QThread):
             self.sniffer.close()
         self.wait()  # Ensure the thread has finished
 
+
 class PacketDetailsWindow(QDialog):
     def __init__(self, packet, parent=None):
         super(PacketDetailsWindow, self).__init__(parent)
@@ -77,12 +78,14 @@ class PacketDetailsWindow(QDialog):
         ansi_escape = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]')
         return ansi_escape.sub('', packet_str)
 
+
 class SnifferApp(QMainWindow):
     def __init__(self):
         super().__init__()
         
         self.sniffer_thread = None
 
+        self.packets = []
         # Initialize selected interface variable
         self.selected_interface = None
 
@@ -301,10 +304,46 @@ class SnifferApp(QMainWindow):
         self.recon_tab = ReconTab(scanner=self.scanner)
         self.tabs.addTab(self.recon_tab, "Recon")
         
-        self.add_tab("Services", "#2A363B")
+        self.add_services_tab()  
         self.add_tab("Wireless", "#2A363B")
         self.add_tab("Visualization", "#2A363B")
         self.add_tab("Packet Crafter ", "#2A363B")
+
+    def add_service(self, title):
+        service_widget = QWidget()
+        service_layout = QVBoxLayout(service_widget)
+  
+        self.services_toolbox.addItem(service_widget, title)
+        return service_widget
+
+    def add_services_tab(self):
+        services_widget = QWidget()
+        services_layout = QVBoxLayout(services_widget)
+        
+        self.services_toolbox = QToolBox()
+        self.services_toolbox.setStyleSheet("""
+            QToolBox::tab {
+                background: #202C31;
+                color: #FFFFFF;
+                border: 1px solid #444444;
+                padding: 2px 16px; 
+                min-height: 50px; 
+                min-width: 150px; 
+            }
+            QToolBox::tab:selected {
+                background: #202C31;
+                font-weight: bold;
+            }
+        """)
+
+        dns_service_tab = self.add_service('DNS')
+        dhcp_service_tabs= self.add_service('DHCP')
+        ssh_service_tab=self.add_service('SSH')
+        ldap_service_tab =self.add_service('LDAP')
+
+        services_layout.addWidget(self.services_toolbox)
+
+        self.tabs.addTab(services_widget, "Services")
 
     def add_sniffer_tab(self):
         # Create a new QWidget for the Sniffer tab
@@ -443,7 +482,9 @@ class SnifferApp(QMainWindow):
         self.sniffer_thread.packet_received.connect(self.pyshark_packet_handler)
         self.sniffer_thread.start()
 
-    def pyshark_packet_handler(self , packet):
+    def pyshark_packet_handler(self , packet , filtered=False):
+        if filtered == False :
+            self.packets.append(packet)
         if 'IP' in packet:
             src_ip = packet.ip.src
             dest_ip = packet.ip.dst
@@ -487,9 +528,8 @@ class SnifferApp(QMainWindow):
             if self.filter_input.text() :
                 self.filtered_packets = [packet for packet in pyshark.FileCapture('temp.pcap', display_filter=self.filter_input.text()) ]
                 for filtered_packet in self.filtered_packets :
-                    self.pyshark_packet_handler(filtered_packet)
+                    self.pyshark_packet_handler(filtered_packet , filtered=True)
             self.start_sniffing()
-
 
     @pyqtSlot(str, str, str, str , str , str , object)
     def update_table(self, src_ip, dest_ip, proto, length , src_port , dst_port , packet):
@@ -540,6 +580,7 @@ class SnifferApp(QMainWindow):
                 for row in range(self.sniffer_table.rowCount()):
                     row_data = [self.sniffer_table.item(row, col).text()for col in range(0,6)]
                     writer.writerow(row_data)
+
     def export_as_json(self):
         # Open a file dialog to choose where to save the JSON file
         file_name, _ = QFileDialog.getSaveFileName(self, "Save JSON File", "", "JSON Files (*.json)")
@@ -570,15 +611,12 @@ class SnifferApp(QMainWindow):
     def open_documentation(self):
         webbrowser.open("https://your.documentation.url")
 
-
     def closeEvent(self, event):
         if self.sniffer_thread and self.sniffer_thread.isRunning():
             self.sniffer_thread.stop()
         
-        # Delete the .pcap file if it exists
-        pcap_file = "temp.pcap"
-        if os.path.exists(pcap_file):
-            os.remove(pcap_file)
+        if os.path.exists("temp.pcap"):
+            os.remove("temp.pcap")
         
         # Call the base class implementation
         event.accept()
