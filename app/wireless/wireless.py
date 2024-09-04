@@ -1,11 +1,15 @@
 from scapy.all import *
-from scapy.layers.dot11 import Dot11Beacon
+import time
 import pywifi
 
 wifi = pywifi.PyWiFi()
 iface = wifi.interfaces()[0]  
 
 iface.scan()
+time.sleep(2)  
+
+
+
 results = iface.scan_results()
 networks = [result for result in results ]
 

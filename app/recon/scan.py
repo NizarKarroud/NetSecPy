@@ -12,7 +12,7 @@ class Scanner:
         self.__network = self._net_obj.with_prefixlen
 
         
-    def arp_scan(self, timeout : int = 1):
+    def arp_scan(self):
         try:
             # Define the Nmap idle scan command
             command = ["nmap", "-sn" , "-PR" ,self.__network]

@@ -1,6 +1,6 @@
 import csv , os , asyncio , pyshark , socket , webbrowser , psutil , sys , re , json , inspect
 import pandas as pd
-from app.recon.scan import Scanner
+from recon.scan import Scanner
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QMenuBar,
     QAction, QStatusBar, QHBoxLayout, QFrame, QScrollArea, QRadioButton,
