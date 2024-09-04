@@ -1,15 +1,16 @@
-import csv , os , asyncio , pyshark , socket , webbrowser , psutil , sys , re , json
+import csv , os , asyncio , pyshark , socket , webbrowser , psutil , sys , re , json , inspect
+import pandas as pd
 from recon.host import Scanner
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QMenuBar,
     QAction, QStatusBar, QHBoxLayout, QFrame, QScrollArea, QRadioButton,
     QButtonGroup, QPushButton, QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView , QLineEdit , QStackedWidget , QGridLayout , QFileDialog
-    , QDialog , QTextEdit , QToolBox
+    , QDialog , QTextEdit , QToolBox , QListWidget , QSpinBox
 )
 from PyQt5.QtCore import Qt, QMetaObject, Q_ARG, pyqtSlot ,  QThread, pyqtSignal
 from scapy.all import  IP_PROTOS 
 from PyQt5.QtGui import QIcon
-from PyQt5.QtCore import QThread, pyqtSignal , QFile
+from PyQt5.QtCore import QThread, pyqtSignal 
 
 class SnifferThread(QThread):
     packet_received = pyqtSignal(object)
@@ -46,7 +47,6 @@ class SnifferThread(QThread):
             self.sniffer.close()
         self.wait()  # Ensure the thread has finished
 
-
 class PacketDetailsWindow(QDialog):
     def __init__(self, packet, parent=None):
         super(PacketDetailsWindow, self).__init__(parent)
@@ -78,6 +78,47 @@ class PacketDetailsWindow(QDialog):
         ansi_escape = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]')
         return ansi_escape.sub('', packet_str)
 
+class ScriptWindow(QDialog):
+    def __init__(self, script_name, parent=None):
+        super(ScriptWindow, self).__init__(parent)
+
+        # Set the title and geometry of the window
+        self.setWindowTitle(f"Script: {script_name}")
+        self.setGeometry(100, 100, 1024, 768)
+
+        # Create a layout for the window
+        layout = QVBoxLayout(self)
+
+        # Add a label to display the selected script name
+        script_label = QLabel(f"Selected Script: {script_name}")
+        layout.addWidget(script_label)
+
+        # Add additional widgets as needed
+        # For example, you can add a text area, buttons, etc.
+
+        # Close button to close the dialog
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(self.accept)
+        layout.addWidget(close_button)
+
+class ResultWindow(QDialog):
+    def __init__(self, response, parent=None):
+        super(ResultWindow, self).__init__(parent)
+
+        # Set the title and geometry of the window
+        self.setWindowTitle("Scan Results")
+        self.setGeometry(100, 100, 1024, 768)
+
+        # Create a layout for the dialog
+        layout = QVBoxLayout()
+
+        # Add a QTextEdit to display the response
+        text_edit = QTextEdit()
+        text_edit.setReadOnly(True)  # Make it read-only
+        text_edit.setText(response)  # Display the response
+        layout.addWidget(text_edit)
+
+        self.setLayout(layout)
 
 class SnifferApp(QMainWindow):
     def __init__(self):
@@ -309,12 +350,26 @@ class SnifferApp(QMainWindow):
         self.add_tab("Visualization", "#2A363B")
         self.add_tab("Packet Crafter ", "#2A363B")
 
-    def add_service(self, title):
+    def add_service(self, title , scripts):
         service_widget = QWidget()
         service_layout = QVBoxLayout(service_widget)
-  
+
+        script_list = QListWidget()
+        script_list.addItems(scripts)
+        service_layout.addWidget(script_list)
+        
+        # Connect the script selection to open a new window
+        script_list.itemClicked.connect(self.open_script_window)
+
         self.services_toolbox.addItem(service_widget, title)
         return service_widget
+    
+    def open_script_window(self, item):
+    # Create an instance of the ScriptWindow class
+        script_window = ScriptWindow(item.text() , self)
+
+        script_window.exec_()
+
 
     def add_services_tab(self):
         services_widget = QWidget()
@@ -335,11 +390,18 @@ class SnifferApp(QMainWindow):
                 font-weight: bold;
             }
         """)
+        # Example services with a list of scripts
+        dns_scripts = ['DNS Lookup', 'Reverse DNS', 'Zone Transfer']
+        dhcp_scripts = ['DHCP Discover', 'DHCP Release']
+        ssh_scripts = ['SSH Brute Force', 'SSH Key Scan']
+        ldap_scripts = ['LDAP Query', 'LDAP Injection']
+        snmp_scripts = ['SNMP Walk', 'SNMP Brute Force']
 
-        dns_service_tab = self.add_service('DNS')
-        dhcp_service_tabs= self.add_service('DHCP')
-        ssh_service_tab=self.add_service('SSH')
-        ldap_service_tab =self.add_service('LDAP')
+        dns_service_tab = self.add_service('DNS' , dns_scripts)
+        dhcp_service_tabs= self.add_service('DHCP' , dhcp_scripts)
+        ssh_service_tab=self.add_service('SSH' , ssh_scripts)
+        ldap_service_tab =self.add_service('LDAP' , ldap_scripts)
+        ldap_service_tab =self.add_service('SNMP' , snmp_scripts)
 
         services_layout.addWidget(self.services_toolbox)
 
@@ -628,32 +690,35 @@ class ReconTab(QWidget):
         self.initUI()
 
     def initUI(self):
-        # Create widgets for each scan page
-        self.pages = {
-            'ARP Scan': self.create_scan_page('ARP Scan'),
-            'TCP SYN Scan': self.create_scan_page('TCP SYN Scan'),
-            'TCP ACK Scan': self.create_scan_page('TCP ACK Scan'),
-            'UDP Ping': self.create_scan_page('UDP Ping'),
-            'ICMP Scan': self.create_scan_page('ICMP Scan'),
-            'TCP Traceroute': self.create_scan_page('TCP Traceroute'),
-            'Idle Scan': self.create_scan_page('Idle Scan'),
-            'FIN Scan': self.create_scan_page('FIN Scan'),
-            'Null Scan': self.create_scan_page('Null Scan'),
-            'Xmas Scan': self.create_scan_page('Xmas Scan'),
-        }
-        
-        # Create a stacked widget for page transitions
+        self.pages = {}
         self.stacked_widget = QStackedWidget()
-
-        # Create the main menu page
         self.main_menu_page = self.create_main_menu_page()
 
-        # Add pages to stacked widget
-        self.stacked_widget.addWidget(self.main_menu_page)
-        for page_name, page_widget in self.pages.items():
-            self.stacked_widget.addWidget(page_widget)
+        # Scan types and their corresponding function names
+        scan_types = {
+            'ARP Scan': self.scanner.arp_scan,
+            'TCP SYN Scan': self.scanner.tcp_syn_scan,
+            'TCP ACK Scan': self.scanner.tcp_ack_scan,
+            'UDP Ping': self.scanner.udp_ping,
+            'ICMP Scan': self.scanner.icmp,
+            'TCP Traceroute': self.scanner.tcp_traceroute,
+            'Idle Scan': self.scanner.idle_scan,
+            'FIN Scan': self.scanner.fin_scan,
+            'Null Scan': self.scanner.null_scan,
+            'Xmas Scan': self.scanner.xmas_scan,
+        }
 
-        # Create the main layout
+        # Create pages for each scan type
+        for scan_name, scan_function in scan_types.items():
+            page = ScanPage(scan_name, self.show_main_menu, scan_function)
+            self.pages[scan_name] = page
+            self.stacked_widget.addWidget(page)
+
+        # Add main menu to the stacked widget
+        self.stacked_widget.addWidget(self.main_menu_page)
+        
+        self.stacked_widget.setCurrentWidget(self.main_menu_page)
+
         layout = QVBoxLayout()
         layout.addWidget(self.stacked_widget)
         self.setLayout(layout)
@@ -664,7 +729,7 @@ class ReconTab(QWidget):
 
         button_names = [
             "ARP Scan", "TCP SYN Scan", "TCP ACK Scan", "UDP Ping",
-            "ICMP Scan", "TCP Traceroute",  "Idle Scan", "FIN Scan", 
+            "ICMP Scan", "TCP Traceroute", "Idle Scan", "FIN Scan", 
             "Null Scan", "Xmas Scan"
         ]
 
@@ -672,10 +737,10 @@ class ReconTab(QWidget):
 
         for pos, name in zip(positions, button_names):
             button = QPushButton(name)
-            button.setFixedSize(150, 150)  # Larger button size
+            button.setFixedSize(150, 150)
             button.setStyleSheet("""
             QPushButton {
-                background-color: #4B3E4D  ;
+                background-color: #4B3E4D;
                 border-radius: 0px;
                 color: white;
                 font-size: 16px;
@@ -693,34 +758,116 @@ class ReconTab(QWidget):
 
         return page
 
-    def create_scan_page(self, scan_name):
-        """Create a page for each scan type with relevant content."""
-        page = QWidget()
-        page_layout = QVBoxLayout()
-
-        # Add a back button to return to the main menu
-        back_button = QPushButton("Back to Menu")
-        back_button.setStyleSheet("""
-            QPushButton {
-                background-color: #202C31  ; }""")
-        back_button.clicked.connect(self.show_main_menu)
-        page_layout.addWidget(back_button)
-
-        page.setLayout(page_layout)
-        return page
-
     def switch_page(self, page_name):
-        """Switch to the selected page."""
         if page_name in self.pages:
             index = self.stacked_widget.indexOf(self.pages[page_name])
             if index != -1:
                 self.stacked_widget.setCurrentIndex(index)
 
     def show_main_menu(self):
-        """Show the main menu page."""
         index = self.stacked_widget.indexOf(self.main_menu_page)
         if index != -1:
             self.stacked_widget.setCurrentIndex(index)
+
+class ScanPage(QWidget):
+    def __init__(self, scan_name, main_menu_callback, scan_function, parent=None):
+        super(ScanPage, self).__init__(parent)
+        self.scan_name = scan_name
+        self.main_menu_callback = main_menu_callback
+        self.scan_function = scan_function
+
+        self.page_layout = QVBoxLayout(self)
+        self.input_fields = {}
+
+        # Dynamically create input fields based on the scan function
+        self.create_input_fields()
+
+        # Add an Execute button
+        self.execute_button = QPushButton(f"Execute {scan_name}")
+        self.execute_button.setStyleSheet("""
+            QPushButton {
+                background-color: #007ACC;
+                color: #FFFFFF;
+            }
+            QPushButton:hover {
+                background-color: #005f9e;
+            }
+        """)
+        self.execute_button.clicked.connect(self.execute_scan)
+        self.page_layout.addWidget(self.execute_button)
+
+        # Text area to display results
+        self.result_area = QTextEdit()
+        self.result_area.setReadOnly(True)
+        self.page_layout.addWidget(self.result_area)
+       
+        # Add a back button
+        self.back_button = QPushButton("Back to Menu")
+        self.back_button.setStyleSheet("""
+            QPushButton {
+                background-color: #202C31;
+                color: #FFFFFF;
+            }
+            QPushButton:hover {
+                background-color: #34495E;
+            }
+        """)
+        self.back_button.clicked.connect(self.main_menu_callback)
+        self.page_layout.addWidget(self.back_button)
+        
+        self.setLayout(self.page_layout)
+
+    def create_input_fields(self):
+        """Dynamically create input fields based on the scan function."""
+        function_signature = inspect.signature(self.scan_function)
+        
+        for param_name, param in function_signature.parameters.items():
+            if param_name == 'self':
+                continue
+            
+            # Create a label for the parameter
+            label = QLabel(f"{param_name.capitalize()}:")
+            self.page_layout.addWidget(label)
+            
+            # Create a line edit for the parameter
+            line_edit = QLineEdit()
+            
+            # Set the default value if available
+            if param.default is not param.empty:
+                line_edit.setText(str(param.default))
+            
+            self.input_fields[param_name] = line_edit
+            self.page_layout.addWidget(line_edit)
+
+
+    def execute_scan(self):
+        """Execute the scan function with the provided input."""
+        kwargs = {}
+        function_signature = inspect.signature(self.scan_function)
+        
+        for param_name, line_edit in self.input_fields.items():
+            value = line_edit.text()
+            
+            # Determine the type of the parameter
+            param = function_signature.parameters.get(param_name)
+            if param:
+                param_type = param.annotation
+                
+                # Convert value based on type hint
+                if param_type is int:
+                    kwargs[param_name] = int(value) if value else param.default
+                else:
+                    kwargs[param_name] = value if value else param.default
+            
+        try:
+            result = self.scan_function(**kwargs)
+            if isinstance(result, pd.DataFrame):
+                self.result_area.setText(result.to_string(index=False))
+            else:
+                self.result_area.setText(str(result))
+        except Exception as e:
+            self.result_area.setText(str(e))
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
