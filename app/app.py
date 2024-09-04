@@ -1,6 +1,6 @@
 import csv , os , asyncio , pyshark , socket , webbrowser , psutil , sys , re , json , inspect
 import pandas as pd
-from recon.host import Scanner
+from app.recon.scan import Scanner
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QMenuBar,
     QAction, QStatusBar, QHBoxLayout, QFrame, QScrollArea, QRadioButton,
@@ -817,50 +817,52 @@ class ScanPage(QWidget):
         
         self.setLayout(self.page_layout)
 
+
     def create_input_fields(self):
         """Dynamically create input fields based on the scan function."""
         function_signature = inspect.signature(self.scan_function)
-        
+
         for param_name, param in function_signature.parameters.items():
             if param_name == 'self':
                 continue
-            
+
             # Create a label for the parameter
             label = QLabel(f"{param_name.capitalize()}:")
             self.page_layout.addWidget(label)
-            
+
             # Create a line edit for the parameter
             line_edit = QLineEdit()
-            
+
             # Set the default value if available
             if param.default is not param.empty:
                 line_edit.setText(str(param.default))
-            
+
             self.input_fields[param_name] = line_edit
             self.page_layout.addWidget(line_edit)
 
-
     def execute_scan(self):
         """Execute the scan function with the provided input."""
-        kwargs = {}
+        args = []
         function_signature = inspect.signature(self.scan_function)
-        
+
         for param_name, line_edit in self.input_fields.items():
             value = line_edit.text()
-            
+
             # Determine the type of the parameter
             param = function_signature.parameters.get(param_name)
             if param:
                 param_type = param.annotation
-                
+
                 # Convert value based on type hint
                 if param_type is int:
-                    kwargs[param_name] = int(value) if value else param.default
+                    args.append(int(value) if value else param.default)
+                elif param_type is str:
+                    args.append(value if value else param.default)
                 else:
-                    kwargs[param_name] = value if value else param.default
-            
+                    args.append(value if value else param.default)
+
         try:
-            result = self.scan_function(**kwargs)
+            result = self.scan_function(*args)
             if isinstance(result, pd.DataFrame):
                 self.result_area.setText(result.to_string(index=False))
             else:
