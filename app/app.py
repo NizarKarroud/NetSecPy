@@ -1,21 +1,25 @@
-import csv , os , asyncio , pyshark , socket , webbrowser , psutil , sys , io , json , inspect
+import csv , os , asyncio , pyshark , socket , webbrowser , psutil , sys , io , json , inspect , subprocess
 import pandas as pd
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QMenuBar,
+    QAction, QStatusBar, QHBoxLayout, QFrame, QScrollArea, QRadioButton,
+    QButtonGroup, QPushButton, QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView , QLineEdit , QStackedWidget , QGridLayout , QFileDialog
+    , QDialog , QTextEdit , QToolBox , QListWidget , QFormLayout , QMessageBox , QTreeView, QFileSystemModel
+)
+from PyQt5.QtCore import Qt, QMetaObject, Q_ARG, pyqtSlot ,  QThread, pyqtSignal
+from scapy.all import  IP_PROTOS  , Ether , wrpcap
+from PyQt5.QtGui import QIcon
+from PyQt5.QtCore import QThread, pyqtSignal 
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from recon.scan import Scanner
 from services.dhcp import DHCP
 from services.dns import DNS
 from services.ssh import SSH
 from services.snmp import SNMP
 from visualization.test import packet_to_data 
-from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QMenuBar,
-    QAction, QStatusBar, QHBoxLayout, QFrame, QScrollArea, QRadioButton,
-    QButtonGroup, QPushButton, QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView , QLineEdit , QStackedWidget , QGridLayout , QFileDialog
-    , QDialog , QTextEdit , QToolBox , QListWidget , QFormLayout
-)
-from PyQt5.QtCore import Qt, QMetaObject, Q_ARG, pyqtSlot ,  QThread, pyqtSignal
-from scapy.all import  IP_PROTOS  ,  Raw, Ether, IP, TCP, UDP, Packet
-from PyQt5.QtGui import QIcon
-from PyQt5.QtCore import QThread, pyqtSignal 
+from monitoring.logger import Logger
 
 class SnifferThread(QThread):
     packet_received = pyqtSignal(object)
@@ -25,7 +29,7 @@ class SnifferThread(QThread):
         self.interface = interface
         self.filter = filter
         self.stop_sniffing = False
-
+    
     def run(self):
         # Create and set up an asyncio event loop in this thread
         loop = asyncio.new_event_loop()
@@ -192,21 +196,7 @@ class SnifferApp(QMainWindow):
         self.setMenuBar(self.menu_bar)
         self.menu_bar.setStyleSheet("background-color: #2A363B; color: #FFFFFF; padding: 5px;border-bottom: 1px solid #000000;")
 
-        # File Menu
-        file_menu = self.menu_bar.addMenu("File")
-        file_menu.setStyleSheet("padding: 5px;")
-        open_action = QAction("Open", self)
-        open_action.triggered.connect(self.open_file)
-        file_menu.addAction(open_action)
-        export_csv_action = QAction("Export as CSV", self)
-        export_csv_action.triggered.connect(self.export_as_csv)
-        file_menu.addAction(export_csv_action)
-        export_json_action = QAction("Export as JSON", self)
-        export_json_action.triggered.connect(self.export_as_json)
-        file_menu.addAction(export_json_action)
-        exit_action = QAction("Exit", self)
-        exit_action.triggered.connect(self.close)
-        file_menu.addAction(exit_action)
+
 
         # Documentation Menu
         documentation_menu = self.menu_bar.addMenu("Documentation")
@@ -353,6 +343,22 @@ class SnifferApp(QMainWindow):
             self.status_bar.showMessage("Please select an interface before proceeding.")
 
     def show_next_page(self):
+        # File Menu
+        file_menu = self.menu_bar.addMenu("File")
+        file_menu.setStyleSheet("padding: 5px;")
+        open_action = QAction("Export as pcap", self)
+        open_action.triggered.connect(self.export_as_pcap)
+        file_menu.addAction(open_action)
+        export_csv_action = QAction("Export as CSV", self)
+        export_csv_action.triggered.connect(self.export_as_csv)
+        file_menu.addAction(export_csv_action)
+        export_json_action = QAction("Export as JSON", self)
+        export_json_action.triggered.connect(self.export_as_json)
+        file_menu.addAction(export_json_action)
+        exit_action = QAction("Exit", self)
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
+        
         # Remove and delete the current central widget
         if self.central_widget is not None:
             self.central_widget.setParent(None)
@@ -389,9 +395,13 @@ class SnifferApp(QMainWindow):
         self.recon_tab = ReconTab(scanner=self.scanner)
         self.tabs.addTab(self.recon_tab, "Recon")
         
+        self.log_tab = LoggerTab(Logger.base_dir)
+        self.tabs.addTab(self.log_tab, "Logs")
+
         self.add_services_tab()  
         self.add_tab("Visualization", "#2A363B")
         self.add_tab("Packet Crafter ", "#2A363B")
+
 
     def open_script_window(self, item):
     # Create an instance of the ScriptWindow class
@@ -556,6 +566,7 @@ class SnifferApp(QMainWindow):
         # Add sniffer tab to the tabs widget
         self.tabs.addTab(sniffer_tab, "Sniffer")
 
+        self.logger = Logger()
         # Start the sniffing thread
         self.start_sniffing()
 
@@ -670,8 +681,18 @@ class SnifferApp(QMainWindow):
         details_window = PacketDetailsWindow(packet,self)
         details_window.exec_()  
 
-    def open_file(self):
-        pass  # Placeholder for file open functionality
+    def export_as_pcap(self ):
+        options = QFileDialog.Options()
+        file_name, _ = QFileDialog.getSaveFileName(self, "Save PCAP File", "", "PCAP Files (*.pcap);;All Files (*)", options=options)
+        
+        if not file_name:
+            return  # User canceled the dialog
+        
+        try :
+            scapy_packets = [self.pyshark_to_scapy(packet) for packet in  self.packets]
+            wrpcap(file_name,scapy_packets)
+        except Exception as e:
+            QMessageBox.critical(self, "Export Error", f"Failed to export packets: {e}")
 
     def export_as_csv(self):
         file_name, _ = QFileDialog.getSaveFileName(self, "Save CSV File", "", "CSV Files (*.csv)")
@@ -723,11 +744,78 @@ class SnifferApp(QMainWindow):
         if self.sniffer_thread and self.sniffer_thread.isRunning():
             self.sniffer_thread.stop()
         
+        if hasattr(self, 'logger') and self.logger and len(self.packets)>0:
+            self.logger.save_pcap([self.pyshark_to_scapy(packet) for packet in self.packets])
+
         if os.path.exists("temp.pcap"):
             os.remove("temp.pcap")
-        
+    
         # Call the base class implementation
         event.accept()
+
+class LoggerTab(QWidget):
+    def __init__(self, logs_dir):
+        super().__init__()
+        self.logs_dir = logs_dir
+        self.init_ui()
+        
+    def init_ui(self):
+        layout = QVBoxLayout()
+
+        logs_dir_label = QLabel(f"{self.logs_dir}")
+        logs_dir_label.setAlignment(Qt.AlignCenter)  # Center the label text
+        logs_dir_label.setStyleSheet("font-weight: bold;")  # Make the text bold
+
+        layout.addWidget(logs_dir_label)
+
+        # Create a button that opens the file explorer at the logs directory
+        open_button = QPushButton("Open in File Explorer")
+        open_button.setStyleSheet("""
+            QPushButton {
+                border: 2px solid #202C31;
+                border-radius: 15px;
+                padding: 10px;
+                background-color: #202C31;
+                color: #FFFFFF;
+                font-size: 16px;
+            }
+            QPushButton:hover {
+                background-color: #151D20 ;
+            }
+            QPushButton:pressed {
+                background-color: #151D20;
+            }
+        """)
+        open_button.clicked.connect(self.open_file_explorer)
+        layout.addWidget(open_button)
+
+        # Set up file system model
+        self.model = QFileSystemModel()
+        self.model.setRootPath(self.logs_dir)
+
+        # Create a tree view and set its model
+        self.tree = QTreeView()
+        self.tree.setStyleSheet("""
+            QHeaderView::section {
+                background-color: #151D20;
+                color: #FFFFFF;
+                padding: 5px;
+                border: 1px solid #151D20;
+            }
+        """)
+        self.tree.setModel(self.model)
+        self.tree.setRootIndex(self.model.index(self.logs_dir))
+        self.tree.setColumnWidth(0, 250)
+
+        # Add the tree view to the layout
+        layout.addWidget(self.tree)
+        
+        self.setLayout(layout)
+
+    def open_file_explorer(self):
+        if os.name == 'nt':  # Windows
+            subprocess.Popen(f'explorer "{self.logs_dir}"')
+
 
 class ReconTab(QWidget):
     def __init__(self, scanner):
