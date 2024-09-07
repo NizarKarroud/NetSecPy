@@ -14,7 +14,6 @@ class Scanner:
         
     def arp_scan(self):
         try:
-            # Define the Nmap idle scan command
             command = ["nmap", "-sn" , "-PR" ,self.__network]
 
             # Run the command and capture the output
@@ -22,7 +21,7 @@ class Scanner:
 
             # Check for errors
             if result.returncode != 0:
-                print(f"Error running idle scan: {result.stderr}")
+                print(f"Error running  scan: {result.stderr}")
             else:
                 # Print the output of the scan
                 return result.stdout
@@ -85,7 +84,6 @@ class Scanner:
 
     def tcp_traceroute(self , target_ip: str ):
         try:
-            # Define the Nmap idle scan command
             command = ["nmap", "--traceroute"  , target_ip]
 
             # Run the command and capture the output
@@ -103,7 +101,6 @@ class Scanner:
 
     def idle_scan(self , zombie_ip: str, target_ip: str):
         try:
-            # Define the Nmap idle scan command
             command = ["nmap", "-Pn" , "-sI" , zombie_ip, target_ip]
 
             # Run the command and capture the output
@@ -111,7 +108,7 @@ class Scanner:
 
             # Check for errors
             if result.returncode != 0:
-                print(f"Error running idle scan: {result.stderr}")
+                print(f"Error running scan: {result.stderr}")
             else:
                 # Print the output of the scan
                 return result.stdout
@@ -121,7 +118,6 @@ class Scanner:
 
     def fin_scan(self , target_ip : str):
         try:
-            # Define the Nmap idle scan command
             command = ["nmap", "-sF"  , target_ip]
 
             # Run the command and capture the output
@@ -139,7 +135,6 @@ class Scanner:
        
     def null_scan(self , target_ip: str ):
         try:
-            # Define the Nmap idle scan command
             command = ["nmap", "-sN"  , target_ip]
 
             # Run the command and capture the output
@@ -157,7 +152,6 @@ class Scanner:
 
     def xmas_scan(self , target_ip: str ):
         try:
-            # Define the Nmap idle scan command
             command = ["nmap", "-sX"  , target_ip]
 
             # Run the command and capture the output

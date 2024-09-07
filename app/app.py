@@ -1,14 +1,19 @@
-import csv , os , asyncio , pyshark , socket , webbrowser , psutil , sys , re , json , inspect
+import csv , os , asyncio , pyshark , socket , webbrowser , psutil , sys , io , json , inspect
 import pandas as pd
 from recon.scan import Scanner
+from services.dhcp import DHCP
+from services.dns import DNS
+from services.ssh import SSH
+from services.snmp import SNMP
+from visualization.test import packet_to_data 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QMenuBar,
     QAction, QStatusBar, QHBoxLayout, QFrame, QScrollArea, QRadioButton,
     QButtonGroup, QPushButton, QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView , QLineEdit , QStackedWidget , QGridLayout , QFileDialog
-    , QDialog , QTextEdit , QToolBox , QListWidget , QSpinBox
+    , QDialog , QTextEdit , QToolBox , QListWidget , QFormLayout
 )
 from PyQt5.QtCore import Qt, QMetaObject, Q_ARG, pyqtSlot ,  QThread, pyqtSignal
-from scapy.all import  IP_PROTOS 
+from scapy.all import  IP_PROTOS  ,  Raw, Ether, IP, TCP, UDP, Packet
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import QThread, pyqtSignal 
 
@@ -27,9 +32,9 @@ class SnifferThread(QThread):
         asyncio.set_event_loop(loop)
 
         if self.filter:
-            self.sniffer = pyshark.LiveCapture(interface=self.interface, display_filter=self.filter)
+            self.sniffer = pyshark.LiveCapture(interface=self.interface, display_filter=self.filter , use_json =True ,  include_raw = True )
         else:
-            self.sniffer = pyshark.LiveCapture(interface=self.interface, output_file="temp.pcap")
+            self.sniffer = pyshark.LiveCapture(interface=self.interface, output_file="temp.pcap" , use_json =True ,  include_raw = True )
         
         try:
             for packet in self.sniffer.sniff_continuously():
@@ -61,8 +66,7 @@ class PacketDetailsWindow(QDialog):
         self.packet_text = QTextEdit(self)
         self.packet_text.setReadOnly(True)
 
-        # Format the packet details
-        formatted_packet = self.format_packet(str(packet))
+        formatted_packet = self.format_packet(packet)
         
         # Add the formatted packet details to the QTextEdit
         self.packet_text.setPlainText(formatted_packet)
@@ -73,18 +77,31 @@ class PacketDetailsWindow(QDialog):
         # Set the layout for the dialog
         self.setLayout(layout)
 
-    def format_packet(self, packet_str):
-        # Remove ANSI escape codes
-        ansi_escape = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]')
-        return ansi_escape.sub('', packet_str)
+    def format_packet(self , pyshark_packet):
+        raw_bytes = bytes(pyshark_packet.get_raw_packet())
+        packet = Ether(raw_bytes)
 
+        output_buffer = io.StringIO()
+
+        sys.stdout = output_buffer
+
+        packet.show()
+
+        sys.stdout = sys.__stdout__
+
+        captured_output = output_buffer.getvalue()
+
+        output_buffer.close()
+
+        return captured_output
+    
 class ScriptWindow(QDialog):
-    def __init__(self, script_name, parent=None):
+    def __init__(self, service, script_name, parent=None):
         super(ScriptWindow, self).__init__(parent)
 
         # Set the title and geometry of the window
         self.setWindowTitle(f"Script: {script_name}")
-        self.setGeometry(100, 100, 1024, 768)
+        self.setGeometry(100, 100, 800, 600)
 
         # Create a layout for the window
         layout = QVBoxLayout(self)
@@ -93,13 +110,40 @@ class ScriptWindow(QDialog):
         script_label = QLabel(f"Selected Script: {script_name}")
         layout.addWidget(script_label)
 
-        # Add additional widgets as needed
-        # For example, you can add a text area, buttons, etc.
+        # Add a section for the command and its arguments
+        if script_name in service.scripts:
+            command = service.scripts[script_name]
+            
+            # Safely get arguments if they exist, or default to an empty list
+            args = getattr(service, 'script_args', {}).get(script_name, [])
+
+            # Create a widget for the command and its arguments
+            command_widget = QWidget()
+            command_layout = QFormLayout(command_widget)
+            
+            # Add the command label
+            command_label = QLabel(f"Command: {command}")
+            command_layout.addRow(command_label)
+
+            # Add text inputs for each argument
+            self.arg_inputs = {}  # Dictionary to store argument input widgets
+            for arg in args:
+                arg_label = QLabel(arg)
+                arg_input = QLineEdit()
+                command_layout.addRow(arg_label, arg_input)
+                self.arg_inputs[arg] = arg_input  # Store the input widget with its label
+
+            # Add the command widget to the main layout
+            layout.addWidget(command_widget)
 
         # Close button to close the dialog
         close_button = QPushButton("Close")
         close_button.clicked.connect(self.accept)
         layout.addWidget(close_button)
+
+    def get_input_values(self):
+        """Retrieve the values entered in the text inputs."""
+        return {arg: input_widget.text() for arg, input_widget in self.arg_inputs.items()}
 
 class ResultWindow(QDialog):
     def __init__(self, response, parent=None):
@@ -346,16 +390,21 @@ class SnifferApp(QMainWindow):
         self.tabs.addTab(self.recon_tab, "Recon")
         
         self.add_services_tab()  
-        self.add_tab("Wireless", "#2A363B")
         self.add_tab("Visualization", "#2A363B")
         self.add_tab("Packet Crafter ", "#2A363B")
 
-    def add_service(self, title , scripts):
+    def open_script_window(self, item):
+    # Create an instance of the ScriptWindow class
+        script_window = ScriptWindow(self.current_service ,item.text() , self)
+
+        script_window.exec_()
+    
+    def add_service(self, title , service):
         service_widget = QWidget()
         service_layout = QVBoxLayout(service_widget)
-
+        self.current_service = service
         script_list = QListWidget()
-        script_list.addItems(scripts)
+        script_list.addItems([script for script in service.scripts.keys()])
         service_layout.addWidget(script_list)
         
         # Connect the script selection to open a new window
@@ -363,13 +412,6 @@ class SnifferApp(QMainWindow):
 
         self.services_toolbox.addItem(service_widget, title)
         return service_widget
-    
-    def open_script_window(self, item):
-    # Create an instance of the ScriptWindow class
-        script_window = ScriptWindow(item.text() , self)
-
-        script_window.exec_()
-
 
     def add_services_tab(self):
         services_widget = QWidget()
@@ -391,17 +433,15 @@ class SnifferApp(QMainWindow):
             }
         """)
         # Example services with a list of scripts
-        dns_scripts = ['DNS Lookup', 'Reverse DNS', 'Zone Transfer']
-        dhcp_scripts = ['DHCP Discover', 'DHCP Release']
-        ssh_scripts = ['SSH Brute Force', 'SSH Key Scan']
-        ldap_scripts = ['LDAP Query', 'LDAP Injection']
-        snmp_scripts = ['SNMP Walk', 'SNMP Brute Force']
+        dhcp_scanner = DHCP()
+        dns_scanner = DNS()
+        ssh_scanner = SSH()
+        snmp_scanner = SNMP()
 
-        dns_service_tab = self.add_service('DNS' , dns_scripts)
-        dhcp_service_tabs= self.add_service('DHCP' , dhcp_scripts)
-        ssh_service_tab=self.add_service('SSH' , ssh_scripts)
-        ldap_service_tab =self.add_service('LDAP' , ldap_scripts)
-        ldap_service_tab =self.add_service('SNMP' , snmp_scripts)
+        dhcp_service_tabs = self.add_service('DHCP' , dhcp_scanner)
+        dns_service_tabs= self.add_service('DNS' , dns_scanner)
+        ssh_service_tab=self.add_service('SSH' , ssh_scanner)
+        snmp_service_tab =self.add_service('SNMP' , snmp_scanner)
 
         services_layout.addWidget(self.services_toolbox)
 
@@ -544,8 +584,8 @@ class SnifferApp(QMainWindow):
         self.sniffer_thread.packet_received.connect(self.pyshark_packet_handler)
         self.sniffer_thread.start()
 
-    def pyshark_packet_handler(self , packet , filtered=False):
-        if filtered == False :
+    def pyshark_packet_handler(self , packet , filtered_from_pcap=False):
+        if filtered_from_pcap == False :
             self.packets.append(packet)
         if 'IP' in packet:
             src_ip = packet.ip.src
@@ -588,9 +628,9 @@ class SnifferApp(QMainWindow):
             self.sniffer_thread.wait()
             self.sniffer_table.setRowCount(0)
             if self.filter_input.text() :
-                self.filtered_packets = [packet for packet in pyshark.FileCapture('temp.pcap', display_filter=self.filter_input.text()) ]
+                self.filtered_packets = [packet for packet in pyshark.FileCapture('temp.pcap', display_filter=self.filter_input.text() , use_json=True , include_raw=True) ]
                 for filtered_packet in self.filtered_packets :
-                    self.pyshark_packet_handler(filtered_packet , filtered=True)
+                    self.pyshark_packet_handler(filtered_packet , filtered_from_pcap=True)
             self.start_sniffing()
 
     @pyqtSlot(str, str, str, str , str , str , object)
@@ -673,6 +713,12 @@ class SnifferApp(QMainWindow):
     def open_documentation(self):
         webbrowser.open("https://your.documentation.url")
 
+    def pyshark_to_scapy(self , pyshark_packet):
+        raw_bytes = bytes(pyshark_packet.get_raw_packet())
+        # Create a Scapy packet from the raw bytes
+        scapy_packet = Ether(raw_bytes)
+        return scapy_packet
+    
     def closeEvent(self, event):
         if self.sniffer_thread and self.sniffer_thread.isRunning():
             self.sniffer_thread.stop()
