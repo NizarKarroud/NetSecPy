@@ -38,7 +38,7 @@ class SnifferThread(QThread):
         if self.filter:
             self.sniffer = pyshark.LiveCapture(interface=self.interface, display_filter=self.filter , use_json =True ,  include_raw = True )
         else:
-            self.sniffer = pyshark.LiveCapture(interface=self.interface, output_file="temp.pcap" , use_json =True ,  include_raw = True )
+            self.sniffer = pyshark.LiveCapture(interface=self.interface, use_json =True ,  include_raw = True )
         
         try:
             for packet in self.sniffer.sniff_continuously():
@@ -639,6 +639,7 @@ class SnifferApp(QMainWindow):
             self.sniffer_thread.wait()
             self.sniffer_table.setRowCount(0)
             if self.filter_input.text() :
+                wrpcap("temp.pcap" , [self.pyshark_to_scapy(packet) for packet in  self.packets])
                 self.filtered_packets = [packet for packet in pyshark.FileCapture('temp.pcap', display_filter=self.filter_input.text() , use_json=True , include_raw=True) ]
                 for filtered_packet in self.filtered_packets :
                     self.pyshark_packet_handler(filtered_packet , filtered_from_pcap=True)
