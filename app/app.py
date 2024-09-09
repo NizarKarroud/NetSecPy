@@ -518,8 +518,8 @@ class SnifferApp(QMainWindow):
 
         # Create a QTableWidget to display captured packets
         self.sniffer_table = QTableWidget(sniffer_tab)
-        self.sniffer_table.setColumnCount(7) 
-        self.sniffer_table.setHorizontalHeaderLabels(["Source IP", "Destination IP", "Protocol", "Length", "Source Port", "Destination Port","More Info"])
+        self.sniffer_table.setColumnCount(8) 
+        self.sniffer_table.setHorizontalHeaderLabels(["Timestamp" ,"Source IP", "Destination IP", "Protocol", "Length", "Source Port", "Destination Port","More Info"])
 
         # Set column width to fit the table
         self.sniffer_table.horizontalHeader().setStretchLastSection(True)
@@ -565,7 +565,31 @@ class SnifferApp(QMainWindow):
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
                 background: #2A363B;
             }
-        """)    
+
+            QScrollBar:horizontal {
+                border: 1px solid #555555;
+                background: #2A363B;
+                height: 12px;
+            }
+            QScrollBar::handle:horizontal {
+                background: #777777;
+                border-radius: 6px;
+            }
+            QScrollBar::add-line:horizontal {
+                border: 1px solid #555555;
+                background: #2A363B;
+                width: 0px;
+            }
+            QScrollBar::sub-line:horizontal {
+                border: 1px solid #555555;
+                background: #2A363B;
+                width: 0px;
+            }
+            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+                background: #2A363B;
+            }
+        """)
+
         layout.addWidget(self.sniffer_table)
 
         # Add the pause/resume button
@@ -605,7 +629,9 @@ class SnifferApp(QMainWindow):
     def pyshark_packet_handler(self , packet , filtered_from_pcap=False):
         if filtered_from_pcap == False :
             self.packets.append(packet)
+
         if 'IP' in packet:
+            timestamp = str(packet.sniff_time)
             src_ip = packet.ip.src
             dest_ip = packet.ip.dst
             proto = IP_PROTOS.d.get(int(packet.ip.proto) , f"{packet.ip.proto}")
@@ -632,6 +658,7 @@ class SnifferApp(QMainWindow):
             QMetaObject.invokeMethod(
                 self, "update_table",
                 Qt.QueuedConnection,
+                Q_ARG(str, timestamp),
                 Q_ARG(str, src_ip),
                 Q_ARG(str, dest_ip),
                 Q_ARG(str, str(proto)),
@@ -652,17 +679,18 @@ class SnifferApp(QMainWindow):
                     self.pyshark_packet_handler(filtered_packet , filtered_from_pcap=True)
             self.start_sniffing()
 
-    @pyqtSlot(str, str, str, str , str , str , object)
-    def update_table(self, src_ip, dest_ip, proto, length , src_port , dst_port , packet):
+    @pyqtSlot(str,str, str, str, str , str , str , object)
+    def update_table(self,timestamp, src_ip, dest_ip, proto, length , src_port , dst_port , packet):
         if not self.paused:
             row_position = self.sniffer_table.rowCount()
             self.sniffer_table.insertRow(row_position)
-            self.sniffer_table.setItem(row_position, 0, QTableWidgetItem(src_ip))
-            self.sniffer_table.setItem(row_position, 1, QTableWidgetItem(dest_ip))
-            self.sniffer_table.setItem(row_position, 2, QTableWidgetItem(proto))
-            self.sniffer_table.setItem(row_position, 3, QTableWidgetItem(length))
-            self.sniffer_table.setItem(row_position, 4, QTableWidgetItem(src_port))
-            self.sniffer_table.setItem(row_position, 5, QTableWidgetItem(dst_port))
+            self.sniffer_table.setItem(row_position, 0, QTableWidgetItem(timestamp))
+            self.sniffer_table.setItem(row_position, 1, QTableWidgetItem(src_ip))
+            self.sniffer_table.setItem(row_position, 2, QTableWidgetItem(dest_ip))
+            self.sniffer_table.setItem(row_position, 3, QTableWidgetItem(proto))
+            self.sniffer_table.setItem(row_position, 4, QTableWidgetItem(length))
+            self.sniffer_table.setItem(row_position, 5, QTableWidgetItem(src_port))
+            self.sniffer_table.setItem(row_position, 6, QTableWidgetItem(dst_port))
 
             more_info_button = QPushButton("More Info")
             more_info_button.setStyleSheet("""
@@ -683,7 +711,7 @@ class SnifferApp(QMainWindow):
             more_info_button.clicked.connect(lambda : self.show_packet(packet))
 
             # Set the button in the "More Info" column
-            self.sniffer_table.setCellWidget(row_position, 6, more_info_button)
+            self.sniffer_table.setCellWidget(row_position, 7, more_info_button)
 
     def show_packet(self,packet):
         details_window = PacketDetailsWindow(packet,self)
@@ -707,9 +735,9 @@ class SnifferApp(QMainWindow):
         if file_name:
             with open(file_name, 'w', newline='') as file:
                 writer = csv.writer(file)
-                writer.writerow(["Source IP", "Destination IP", "Protocol", "Length", "Source Port", "Destination Port"])
+                writer.writerow(["Timestamp", "Source IP", "Destination IP", "Protocol", "Length", "Source Port", "Destination Port"])
                 for row in range(self.sniffer_table.rowCount()):
-                    row_data = [self.sniffer_table.item(row, col).text()for col in range(0,6)]
+                    row_data = [self.sniffer_table.item(row, col).text()for col in range(0,7)]
                     writer.writerow(row_data)
 
     def export_as_json(self):
@@ -721,7 +749,7 @@ class SnifferApp(QMainWindow):
             # Iterate over each row in the table
             for row in range(self.sniffer_table.rowCount()):
                 row_data = {}
-                for col in range(6):
+                for col in range(7):
                     item = self.sniffer_table.item(row, col)
                     
                     # Check if item is valid and a QTableWidgetItem
