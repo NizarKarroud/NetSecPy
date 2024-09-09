@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QMenuBar,
     QAction, QStatusBar, QHBoxLayout, QFrame, QScrollArea, QRadioButton,
     QButtonGroup, QPushButton, QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView , QLineEdit , QStackedWidget , QGridLayout , QFileDialog
-    , QDialog , QTextEdit , QToolBox , QListWidget , QFormLayout , QMessageBox , QTreeView, QFileSystemModel
+    , QDialog , QTextEdit , QToolBox , QListWidget , QFormLayout , QMessageBox , QTreeView, QFileSystemModel , QMenu
 )
 from PyQt5.QtCore import Qt, QMetaObject, Q_ARG, pyqtSlot ,  QThread, pyqtSignal
 from scapy.all import  IP_PROTOS  , Ether , wrpcap
@@ -16,9 +16,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from recon.scan import Scanner
 from services.dhcp import DHCP
 from services.dns import DNS
-from services.ssh import SSH
-from services.snmp import SNMP
-from visualization.test import packet_to_data 
 from monitoring.logger import Logger
 
 class SnifferThread(QThread):
@@ -116,7 +113,7 @@ class ScriptWindow(QDialog):
 
         # Add a section for the command and its arguments
         if script_name in service.scripts:
-            command = service.scripts[script_name]
+            command = str(service.scripts[script_name]["command"])
             
             # Safely get arguments if they exist, or default to an empty list
             args = getattr(service, 'script_args', {}).get(script_name, [])
@@ -398,8 +395,10 @@ class SnifferApp(QMainWindow):
         self.log_tab = LoggerTab(Logger.base_dir)
         self.tabs.addTab(self.log_tab, "Logs")
 
-        self.add_services_tab()  
-        self.add_tab("Visualization", "#2A363B")
+        self.add_services_tab() 
+        self.analyzer_tab = AnalysisTab(self) 
+        self.tabs.addTab(self.analyzer_tab, "Analysis")
+
         self.add_tab("Packet Crafter ", "#2A363B")
 
 
@@ -445,13 +444,9 @@ class SnifferApp(QMainWindow):
         # Example services with a list of scripts
         dhcp_scanner = DHCP()
         dns_scanner = DNS()
-        ssh_scanner = SSH()
-        snmp_scanner = SNMP()
 
         dhcp_service_tabs = self.add_service('DHCP' , dhcp_scanner)
         dns_service_tabs= self.add_service('DNS' , dns_scanner)
-        ssh_service_tab=self.add_service('SSH' , ssh_scanner)
-        snmp_service_tab =self.add_service('SNMP' , snmp_scanner)
 
         services_layout.addWidget(self.services_toolbox)
 
@@ -817,7 +812,6 @@ class LoggerTab(QWidget):
         if os.name == 'nt':  # Windows
             subprocess.Popen(f'explorer "{self.logs_dir}"')
 
-
 class ReconTab(QWidget):
     def __init__(self, scanner):
         super().__init__()
@@ -1004,6 +998,52 @@ class ScanPage(QWidget):
                 self.result_area.setText(str(result))
         except Exception as e:
             self.result_area.setText(str(e))
+
+class AnalysisTab(QWidget):
+    def __init__(self, parent=None):
+        super(AnalysisTab, self).__init__(parent)
+        self.init_ui()
+
+    def init_ui(self):
+        # Create and set up the layout
+        main_layout = QVBoxLayout(self)
+
+        # Create the toolbox
+        self.toolbox = QToolBox()
+        self.toolbox.setStyleSheet("""
+            QToolBox::tab {
+                background: #202C31;
+                color: #FFFFFF;
+                border: 1px solid #444444;
+                padding: 2px 16px; 
+                min-height: 50px; 
+                min-width: 150px; 
+            }
+            QToolBox::tab:selected {
+                background: #202C31;
+                font-weight: bold;
+            }
+        """)
+
+        # Add sections to the toolbox
+        self.add_analysis_section("Ethernet Layer", ["Communication Graph", "MAC Frequency Analysis", "Mac Pairs Analysis , Analyze Ethernet Types , Detect ARP poisoning, Broadcast Traffic Analysis"])
+
+        # Add the toolbox to the main layout
+        main_layout.addWidget(self.toolbox)
+        self.setLayout(main_layout)
+
+    def add_analysis_section(self, title, items):
+        # Create a widget for the section
+        section_widget = QWidget()
+        section_layout = QVBoxLayout(section_widget)
+
+        # Create a list widget for the section items
+        list_widget = QListWidget()
+        list_widget.addItems(items)
+        section_layout.addWidget(list_widget)
+
+        # Add the section widget to the toolbox
+        self.toolbox.addItem(section_widget, title)
 
 
 if __name__ == "__main__":
