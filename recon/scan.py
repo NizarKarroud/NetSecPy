@@ -166,4 +166,20 @@ class Scanner:
 
         except Exception as e:
             return str(e)
-        
+    
+    def os(self,target_ip : str):
+        try:
+            command = ["nmap", "-O"  , target_ip]
+
+            # Run the command and capture the output
+            result = subprocess.run(command, capture_output=True, text=True)
+
+            # Check for errors
+            if result.returncode != 0:
+                print(f"Error running scan: {result.stderr}")
+            else:
+                # Print the output of the scan
+                return result.stdout
+
+        except Exception as e:
+            return str(e)

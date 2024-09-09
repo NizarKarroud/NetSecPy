@@ -18,6 +18,11 @@ from services.dhcp import DHCP
 from services.dns import DNS
 from monitoring.logger import Logger
 
+
+"""
+        ADD MORE SCANS IN THE RECON , USE NMAP
+
+"""
 class SnifferThread(QThread):
     packet_received = pyqtSignal(object)
 
@@ -410,7 +415,6 @@ class SnifferApp(QMainWindow):
 
         self.add_tab("Packet Crafter ", "#2A363B")
 
-
     def open_script_window(self, item, service):
         # Create an instance of the ScriptWindow class
         script_window = ScriptWindow(service, item.text(), self)
@@ -458,6 +462,11 @@ class SnifferApp(QMainWindow):
         services_layout.addWidget(self.services_toolbox)
 
         self.tabs.addTab(services_widget, "Services")
+    
+    def add_tab(self, title, color):
+        tab = QWidget()
+        tab.setStyleSheet(f"background-color: {color};")
+        self.tabs.addTab(tab, title)
 
     def add_sniffer_tab(self):
         # Create a new QWidget for the Sniffer tab
@@ -582,10 +591,6 @@ class SnifferApp(QMainWindow):
             self.sniffer_thread.stop()
             self.pause_button.setText("Resume")
 
-    def add_tab(self, title, color):
-        tab = QWidget()
-        tab.setStyleSheet(f"background-color: {color};")
-        self.tabs.addTab(tab, title)
 
     def start_sniffing(self):
         if self.sniffer_thread:
@@ -842,6 +847,7 @@ class ReconTab(QWidget):
             'FIN Scan': self.scanner.fin_scan,
             'Null Scan': self.scanner.null_scan,
             'Xmas Scan': self.scanner.xmas_scan,
+            'OS Detection' :self.scanner.os
         }
 
         # Create pages for each scan type
@@ -866,7 +872,7 @@ class ReconTab(QWidget):
         button_names = [
             "ARP Scan", "TCP SYN Scan", "TCP ACK Scan", "UDP Ping",
             "ICMP Scan", "TCP Traceroute", "Idle Scan", "FIN Scan", 
-            "Null Scan", "Xmas Scan"
+            "Null Scan", "Xmas Scan" , "OS Detection"
         ]
 
         positions = [(i, j) for i in range(3) for j in range(4)]
@@ -1033,7 +1039,7 @@ class AnalysisTab(QWidget):
         """)
 
         # Add sections to the toolbox
-        self.add_analysis_section("Ethernet Layer", ["Communication Graph", "MAC Frequency Analysis", "Mac Pairs Analysis , Analyze Ethernet Types , Detect ARP poisoning, Broadcast Traffic Analysis"])
+        self.add_analysis_section("Ethernet Layer", ["Communication Graph", "MAC Frequency Analysis", "Mac Pairs Analysis ", "Analyze Ethernet Types" , "Detect ARP poisoning","Broadcast Traffic Analysis"])
 
         # Add the toolbox to the main layout
         main_layout.addWidget(self.toolbox)
