@@ -100,6 +100,9 @@ class ScriptWindow(QDialog):
     def __init__(self, service, script_name, parent=None):
         super(ScriptWindow, self).__init__(parent)
 
+        self.service = service
+        self.script_name = script_name
+
         # Set the title and geometry of the window
         self.setWindowTitle(f"Script: {script_name}")
         self.setGeometry(100, 100, 800, 600)
@@ -113,38 +116,44 @@ class ScriptWindow(QDialog):
 
         # Add a section for the command and its arguments
         if script_name in service.scripts:
-            command = str(service.scripts[script_name]["command"])
-            
-            # Safely get arguments if they exist, or default to an empty list
-            args = getattr(service, 'script_args', {}).get(script_name, [])
+            # Command for the selected script
+            command = service.scripts[script_name]["command"]
 
-            # Create a widget for the command and its arguments
-            command_widget = QWidget()
-            command_layout = QFormLayout(command_widget)
-            
-            # Add the command label
-            command_label = QLabel(f"Command: {command}")
-            command_layout.addRow(command_label)
+            # Display the command
+            command_str = ' '.join(command)
+            command_label = QLabel(f"Command: {command_str}")
+            layout.addWidget(command_label)
 
-            # Add text inputs for each argument
-            self.arg_inputs = {}  # Dictionary to store argument input widgets
-            for arg in args:
-                arg_label = QLabel(arg)
-                arg_input = QLineEdit()
-                command_layout.addRow(arg_label, arg_input)
-                self.arg_inputs[arg] = arg_input  # Store the input widget with its label
+            # Arguments handling
+            if service.scripts[script_name].get("argument", False):
+                self.arg_input = QLineEdit()  # Input field for target argument
+                layout.addWidget(QLabel("Target:"))  # Label for argument
+                layout.addWidget(self.arg_input)  # Input field for the argument
 
-            # Add the command widget to the main layout
-            layout.addWidget(command_widget)
+        # Text area to display the output of the script
+        self.result_text_area = QTextEdit()
+        self.result_text_area.setReadOnly(True)  # Output area should be read-only
+        layout.addWidget(self.result_text_area)
+
+        # Execute button to run the script
+        execute_button = QPushButton("Execute")
+        execute_button.clicked.connect(self.execute_script)
+        layout.addWidget(execute_button)
 
         # Close button to close the dialog
         close_button = QPushButton("Close")
         close_button.clicked.connect(self.accept)
         layout.addWidget(close_button)
 
-    def get_input_values(self):
-        """Retrieve the values entered in the text inputs."""
-        return {arg: input_widget.text() for arg, input_widget in self.arg_inputs.items()}
+    def execute_script(self):
+        try:
+            if hasattr(self, 'arg_input'): 
+                result = self.service.run(self.script_name , self.arg_input.text()) 
+            else :
+                result =  self.service.run(self.script_name) 
+            self.result_text_area.append(result)
+        except Exception as e:
+            self.result_text_area.append(f"Error executing command: {str(e)}")
 
 class ResultWindow(QDialog):
     def __init__(self, response, parent=None):
@@ -402,22 +411,20 @@ class SnifferApp(QMainWindow):
         self.add_tab("Packet Crafter ", "#2A363B")
 
 
-    def open_script_window(self, item):
-    # Create an instance of the ScriptWindow class
-        script_window = ScriptWindow(self.current_service ,item.text() , self)
-
+    def open_script_window(self, item, service):
+        # Create an instance of the ScriptWindow class
+        script_window = ScriptWindow(service, item.text(), self)
         script_window.exec_()
-    
-    def add_service(self, title , service):
+
+    def add_service(self, title, service):
         service_widget = QWidget()
         service_layout = QVBoxLayout(service_widget)
-        self.current_service = service
         script_list = QListWidget()
         script_list.addItems([script for script in service.scripts.keys()])
         service_layout.addWidget(script_list)
         
-        # Connect the script selection to open a new window
-        script_list.itemClicked.connect(self.open_script_window)
+        # Connect the script selection to open a new window, passing the correct service
+        script_list.itemClicked.connect(lambda item: self.open_script_window(item, service))
 
         self.services_toolbox.addItem(service_widget, title)
         return service_widget

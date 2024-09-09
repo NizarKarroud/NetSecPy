@@ -24,7 +24,9 @@ class DNS :
         }
 
         
-    def run(self,command , target:str=None):
+    def run(self,script_name , target:str=None):
+        command = self.scripts[script_name]["command"]
         if target:
             command.append(target.strip())
+
         return nmap.run(command)
