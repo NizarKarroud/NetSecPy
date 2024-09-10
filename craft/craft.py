@@ -2,7 +2,7 @@ from scapy.all import Ether, ICMP , TCP , UDP ,IP, Raw , ETHER_TYPES , TCP_SERVI
 
 
 import sys
-from PyQt5.QtWidgets import QComboBox , QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel, QLineEdit, QPushButton, QStackedWidget, QHBoxLayout, QFormLayout
+from PyQt5.QtWidgets import QComboBox , QTextEdit,QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel, QLineEdit, QPushButton, QStackedWidget, QHBoxLayout, QFormLayout
 from PyQt5.QtCore import Qt
 
 class PacketCrafter:
@@ -191,7 +191,6 @@ class PacketCrafter:
         else:
             print("No packet crafted to send.")
         self.packet = None
-
 
 class PacketCrafterApp(QMainWindow):
     def __init__(self):
@@ -425,7 +424,8 @@ class PacketCrafterApp(QMainWindow):
         self.stacked_widget.addWidget(self.page1)
         self.stacked_widget.addWidget(self.page2)
         self.stacked_widget.addWidget(self.page3)
-        
+        self.create_data_page()
+
     def show_protocol_page(self, protocol):
         """Show the selected protocol page and remove any existing protocol pages."""
         
@@ -436,6 +436,14 @@ class PacketCrafterApp(QMainWindow):
             'ICMP': 'icmp_page'
         }
         
+        # Check if self.page4 exists and delete it
+        if hasattr(self, 'page4'):
+            page4 = getattr(self, 'page4', None)
+            if page4:
+                self.stacked_widget.removeWidget(page4)
+                page4.deleteLater()
+                setattr(self, 'page4', None)
+ 
         # Get the page to show
         current_page_attr = pages.get(protocol, None)
         
@@ -452,7 +460,6 @@ class PacketCrafterApp(QMainWindow):
                         setattr(self, attr, None)
 
 
-
             # Create and add the current page if it does not exist
             current_page = getattr(self, current_page_attr, None)
             if not current_page:
@@ -461,6 +468,7 @@ class PacketCrafterApp(QMainWindow):
                 setattr(self, current_page_attr, current_page)
                 self.stacked_widget.addWidget(current_page)
             
+            self.create_data_page()
             # Set the current page widget
             self.stacked_widget.setCurrentWidget(current_page)
         else:
@@ -635,6 +643,34 @@ class PacketCrafterApp(QMainWindow):
         layout.addLayout(icmp_layout)
         return page
 
+    def create_data_page(self ):
+
+        self.page4 = QWidget()
+        self.page4_layout = QVBoxLayout()
+        self.page4.setLayout(self.page4_layout)
+
+        self.page4_layout.addWidget(self.create_header("Data Layer"))
+
+        self.data_form_layout = QFormLayout()
+        self.data_form_layout.setLabelAlignment(Qt.AlignRight)
+        self.data_form_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        
+        self.payload = QTextEdit()
+        self.payload.setStyleSheet("""
+            padding: 8px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.payload.setPlaceholderText("Enter payload here...")
+
+        self.add_form_row("Payload:", self.payload, self.data_form_layout)
+
+        self.page4_layout.addLayout(self.data_form_layout)
+
+        self.stacked_widget.addWidget(self.page4)
+
     def update_icmp_code_combobox(self):
         """Update the ICMP Code combobox based on the selected ICMP Type."""
         selected_type_name = self.icmp_type_combobox.currentText()
@@ -674,6 +710,7 @@ class PacketCrafterApp(QMainWindow):
         """)
         return header
     
+
     def init_navigation_buttons(self):
         """Initialize navigation buttons at the bottom of the main layout."""
         self.navigation_layout = QHBoxLayout()
@@ -721,12 +758,6 @@ class PacketCrafterApp(QMainWindow):
     def update_navigation_buttons(self):
         """Update the navigation buttons visibility based on the current page."""
         current_index = self.stacked_widget.currentIndex()
-
-        # Hide the 'Next' button on the transport layer page (page index 2)
-        if current_index == 2:
-            self.next_button.setVisible(False)
-        else:
-            self.next_button.setVisible(True)
 
         # Disable the 'Previous' button on the first page
         self.prev_button.setEnabled(current_index > 0)
