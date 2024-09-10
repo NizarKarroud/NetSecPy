@@ -1,6 +1,10 @@
 from scapy.all import Ether, ICMP , TCP , UDP ,IP, Raw , ETHER_TYPES , TCP_SERVICES, UDP_SERVICES  , IP_PROTOS ,sendp, send, srp, sr, sendpfast   
 
 
+import sys
+from PyQt5.QtWidgets import QComboBox , QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel, QLineEdit, QPushButton, QStackedWidget, QHBoxLayout, QFormLayout
+from PyQt5.QtCore import Qt
+
 class PacketCrafter:
     ether_types = ETHER_TYPES.d
 
@@ -187,4 +191,308 @@ class PacketCrafter:
         else:
             print("No packet crafted to send.")
         self.packet = None
+
+class PacketCrafterApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Packet Crafter")
+        self.setGeometry(100, 100, 800, 600)
+        self.setStyleSheet("""
+            background-color: #2A363B; 
+            color: #FFFFFF; 
+            font-family: Arial, sans-serif;
+        """)
         
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
+        
+        self.layout = QVBoxLayout(self.central_widget)
+        
+        # Create a QStackedWidget to handle page transitions
+        self.stacked_widget = QStackedWidget()
+        self.layout.addWidget(self.stacked_widget)
+        
+        # Initialize pages
+        self.init_pages()
+
+        # Navigation buttons
+        self.init_navigation_buttons()
+        
+        # Set initial page
+        self.stacked_widget.setCurrentIndex(0)
+
+    def init_pages(self):
+        # Page 1: Ethernet Information (Ethernet Layer)
+        self.page1 = QWidget()
+        self.page1_layout = QVBoxLayout()
+        self.page1.setLayout(self.page1_layout)
+
+        self.page1_layout.addWidget(self.create_header("Ethernet Layer"))
+
+        # Ethernet Form
+        self.ethernet_form_layout = QFormLayout()
+        self.ethernet_form_layout.setLabelAlignment(Qt.AlignRight)
+        self.ethernet_form_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        
+        # Ethernet Source Input
+        self.ether_src_input = QLineEdit()
+        self.ether_src_input.setStyleSheet("""
+            padding: 8px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.add_form_row("Ethernet Source:", self.ether_src_input, self.ethernet_form_layout)
+
+        # Ethernet Destination Input
+        self.ether_dst_input = QLineEdit()
+        self.ether_dst_input.setStyleSheet("""
+            padding: 8px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.add_form_row("Ethernet Destination:", self.ether_dst_input, self.ethernet_form_layout)
+
+        # Ethernet Type ComboBox (Dynamic from ether_types.values)
+        self.ether_type_combo = QComboBox()
+        self.ether_type_combo.addItems(sorted(PacketCrafter.ether_types.values()))
+        self.ether_type_combo.setStyleSheet("""
+            padding: 8px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.add_form_row("Ethernet Type:", self.ether_type_combo, self.ethernet_form_layout)
+
+        self.page1_layout.addLayout(self.ethernet_form_layout)
+        
+        # Page 2: IP Information (IP Layer)
+        self.page2 = QWidget()
+        self.page2_layout = QVBoxLayout()
+        self.page2.setLayout(self.page2_layout)
+
+        self.page2_layout.addWidget(self.create_header("IP Layer"))
+
+        # IP Form
+        self.ip_form_layout = QFormLayout()
+        self.ip_form_layout.setLabelAlignment(Qt.AlignRight)
+        self.ip_form_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        
+        # IP Source Input
+        self.ip_src_input = QLineEdit()
+        self.ip_src_input.setStyleSheet("""
+            padding: 8px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.add_form_row("IP Source:", self.ip_src_input, self.ip_form_layout)
+
+        # IP Destination Input
+        self.ip_dst_input = QLineEdit()
+        self.ip_dst_input.setStyleSheet("""
+            padding: 8px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.add_form_row("IP Destination:", self.ip_dst_input, self.ip_form_layout)
+
+        # ToS Input
+        self.ip_tos_input = QLineEdit("0")
+        self.ip_tos_input.setStyleSheet("""
+            padding: 8px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.add_form_row("ToS:", self.ip_tos_input, self.ip_form_layout)
+
+        # Length Input
+        self.ip_len_input = QLineEdit("None")
+        self.ip_len_input.setStyleSheet("""
+            padding: 8px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.add_form_row("Length:", self.ip_len_input, self.ip_form_layout)
+
+        # ID Input
+        self.ip_id_input = QLineEdit("1")
+        self.ip_id_input.setStyleSheet("""
+            padding: 8px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.add_form_row("ID:", self.ip_id_input, self.ip_form_layout)
+
+        # Fragment Offset Input
+        self.ip_frag_input = QLineEdit("0")
+        self.ip_frag_input.setStyleSheet("""
+            padding: 8px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.add_form_row("Fragment Offset:", self.ip_frag_input, self.ip_form_layout)
+
+        # TTL Input
+        self.ip_ttl_input = QLineEdit("64")
+        self.ip_ttl_input.setStyleSheet("""
+            padding: 8px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.add_form_row("TTL:", self.ip_ttl_input, self.ip_form_layout)
+
+        # Version Input
+        self.ip_version_input = QLineEdit("4")
+        self.ip_version_input.setStyleSheet("""
+            padding: 8px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.add_form_row("Version:", self.ip_version_input, self.ip_form_layout)
+
+        # Protocol ComboBox (Dynamic from ip_protocols.values)
+        self.ip_proto_combo = QComboBox()
+        self.ip_proto_combo.addItems(sorted(PacketCrafter.ip_protocols.values()))
+        self.ip_proto_combo.setStyleSheet("""
+            padding: 8px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.add_form_row("Protocol:", self.ip_proto_combo, self.ip_form_layout)
+
+        self.page2_layout.addLayout(self.ip_form_layout)
+        
+        # Page 3: Transport Layer Selection
+        self.page3 = QWidget()
+        self.page3_layout = QVBoxLayout()
+        self.page3.setLayout(self.page3_layout)
+
+        self.page3_layout.addWidget(self.create_header("Select Transport Layer Protocol"))
+
+        # Protocol Buttons
+        self.tcp_button = QPushButton("TCP")
+        self.udp_button = QPushButton("UDP")
+        self.icmp_button = QPushButton("ICMP")
+
+        button_style = """
+            padding: 10px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+            font-size: 14px;
+        """
+        self.tcp_button.setStyleSheet(button_style)
+        self.udp_button.setStyleSheet(button_style)
+        self.icmp_button.setStyleSheet(button_style)
+
+        self.page3_layout.addWidget(self.tcp_button)
+        self.page3_layout.addWidget(self.udp_button)
+        self.page3_layout.addWidget(self.icmp_button)
+
+        # Add pages to stacked widget
+        self.stacked_widget.addWidget(self.page1)
+        self.stacked_widget.addWidget(self.page2)
+        self.stacked_widget.addWidget(self.page3)
+
+    def add_form_row(self, label_text, widget, layout):
+        """Add a label and widget to the provided layout with consistent styling."""
+        label = QLabel(label_text)
+        label.setStyleSheet("color: #FFFFFF;")
+        layout.addRow(label, widget)
+
+    def create_header(self, text):
+        """Create a styled header widget."""
+        header = QLabel(text)
+        header.setStyleSheet("""
+            color: #4CAF50;
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        """)
+        return header
+
+    def init_navigation_buttons(self):
+        """Initialize navigation buttons at the bottom of the main layout."""
+        self.navigation_layout = QHBoxLayout()
+        self.layout.addLayout(self.navigation_layout)
+
+        # Previous Button
+        self.prev_button = QPushButton("Previous")
+        self.prev_button.setStyleSheet("""
+            padding: 10px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.prev_button.clicked.connect(self.go_prev)
+
+        # Next Button
+        self.next_button = QPushButton("Next")
+        self.next_button.setStyleSheet("""
+            padding: 10px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.next_button.clicked.connect(self.go_next)
+
+        self.navigation_layout.addWidget(self.prev_button)
+        self.navigation_layout.addWidget(self.next_button)
+
+    def go_prev(self):
+        """Handle the previous button click."""
+        current_index = self.stacked_widget.currentIndex()
+        if current_index > 0:
+            self.stacked_widget.setCurrentIndex(current_index - 1)
+            self.update_navigation_buttons()
+
+    def go_next(self):
+        """Handle the next button click."""
+        current_index = self.stacked_widget.currentIndex()
+        if current_index < self.stacked_widget.count() - 1:
+            self.stacked_widget.setCurrentIndex(current_index + 1)
+        self.update_navigation_buttons()
+
+    def update_navigation_buttons(self):
+        """Update the navigation buttons visibility based on the current page."""
+        current_index = self.stacked_widget.currentIndex()
+
+        # Hide the 'Next' button on the transport layer page (page index 2)
+        if current_index == 2:
+            self.next_button.setVisible(False)
+        else:
+            self.next_button.setVisible(True)
+
+        # Disable the 'Previous' button on the first page
+        self.prev_button.setEnabled(current_index > 0)
+        
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    main_window = PacketCrafterApp()
+    main_window.show()
+    sys.exit(app.exec_())
