@@ -9,7 +9,7 @@ import plotly.graph_objects as go
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from craft.craft import EthernetLayer  
+from craft.craft import PacketCrafter
 
 class NTA:
     def __init__(self, packets=[], pcap_file=None) -> None:
@@ -48,7 +48,7 @@ class NTA:
 
         if 'Ether_type' in fields_dict:
             ether_type_value = fields_dict['Ether_type']
-            ether_type_name = EthernetLayer.get_ether_type_name(ether_type_value)
+            ether_type_name = PacketCrafter.get_ether_type_name(ether_type_value)
             fields_dict['Ether_type'] = ether_type_name
         
         fields_dict['Timestamp'] = packet.time
@@ -550,7 +550,3 @@ class IpAnalyzer:
         # Reset index if you need to restore the original DataFrame structure
         self.ip_data.reset_index(inplace=True)
 
-# Example usage
-nta = NTA(pcap_file="test3.pcap")  
-ip = IpAnalyzer(nta.data)
-ip.traffic_volume_over_time()

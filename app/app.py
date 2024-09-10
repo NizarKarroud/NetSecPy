@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QMenuBar,
     QAction, QStatusBar, QHBoxLayout, QFrame, QScrollArea, QRadioButton,
     QButtonGroup, QPushButton, QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView , QLineEdit , QStackedWidget , QGridLayout , QFileDialog
-    , QDialog , QTextEdit , QToolBox , QListWidget , QFormLayout , QMessageBox , QTreeView, QFileSystemModel , QMenu
+    , QDialog , QTextEdit , QToolBox , QListWidget , QDialogButtonBox , QMessageBox , QTreeView, QFileSystemModel , QMenu
 )
 from PyQt5.QtCore import Qt, QMetaObject, Q_ARG, pyqtSlot ,  QThread, pyqtSignal
 from scapy.all import  IP_PROTOS  , Ether , wrpcap , hexdump
@@ -17,7 +17,7 @@ from recon.scan import Scanner
 from services.dhcp import DHCP
 from services.dns import DNS
 from monitoring.logger import Logger
-
+from visualization.main import NTA , EtherAnalyzer , IpAnalyzer
 
 class SnifferThread(QThread):
     packet_received = pyqtSignal(object)
@@ -189,7 +189,7 @@ class SnifferApp(QMainWindow):
         # Initialize pause attribute
         self.paused = False
 
-        self.setWindowTitle("Windows Sniffer App")
+        self.setWindowTitle("NetSecPy")
         self.setGeometry(100, 100, 1024, 768)
         self.setStyleSheet("background-color: #2A363B; color: #FFFFFF; font-family: Arial, sans-serif;")
 
@@ -403,14 +403,15 @@ class SnifferApp(QMainWindow):
         self.recon_tab = ReconTab(scanner=self.scanner)
         self.tabs.addTab(self.recon_tab, "Recon")
         
-        self.log_tab = LoggerTab(Logger.base_dir)
-        self.tabs.addTab(self.log_tab, "Logs")
+        self.add_services_tab()
 
-        self.add_services_tab() 
-        self.analyzer_tab = AnalysisTab(self) 
+        self.analyzer_tab = AnalysisTab(self ) 
         self.tabs.addTab(self.analyzer_tab, "Analysis")
 
         self.add_tab("Packet Crafter ", "#2A363B")
+        
+        self.log_tab = LoggerTab(Logger.base_dir)
+        self.tabs.addTab(self.log_tab, "Logs")
 
     def open_script_window(self, item, service):
         # Create an instance of the ScriptWindow class
@@ -473,9 +474,8 @@ class SnifferApp(QMainWindow):
         # Add a horizontal layout for the filter input and button
         filter_layout = QHBoxLayout()
 
-        # Create the QLineEdit for BPF filter input
         self.filter_input = QLineEdit(self)
-        self.filter_input.setPlaceholderText("Enter BPF filter...")
+        self.filter_input.setPlaceholderText("Enter Display filter...")
         self.filter_input.setStyleSheet("""
             QLineEdit {
                 border: 2px solid #555555;
@@ -1041,11 +1041,36 @@ class AnalysisTab(QWidget):
     def __init__(self, parent=None):
         super(AnalysisTab, self).__init__(parent)
         self.init_ui()
+        self.parent = parent
 
     def init_ui(self):
-        # Create and set up the layout
-        main_layout = QVBoxLayout(self)
-
+        # Create the stacked widget to switch between pages
+        self.stacked_widget = QStackedWidget(self)
+        
+        # Create and add the choice page
+        self.choice_page = QWidget()
+        self.choice_layout = QVBoxLayout(self.choice_page)
+        
+        # Create radio buttons
+        self.packet_radio = QRadioButton("Packets")
+        self.file_radio = QRadioButton("File")
+        self.file_radio.setChecked(True)  # Set default to "File"
+                
+        # Create the "Next" button
+        self.next_button = QPushButton("Next")
+        self.next_button.clicked.connect(self.next_page)
+        
+        # Add widgets to layout
+        self.choice_layout.addWidget(self.packet_radio)
+        self.choice_layout.addWidget(self.file_radio)
+        self.choice_layout.addWidget(self.next_button)
+        
+        self.stacked_widget.addWidget(self.choice_page)
+        
+        # Create and add the analysis options page
+        self.analysis_page = QWidget()
+        self.analysis_layout = QVBoxLayout(self.analysis_page)
+        
         # Create the toolbox
         self.toolbox = QToolBox()
         self.toolbox.setStyleSheet("""
@@ -1062,27 +1087,62 @@ class AnalysisTab(QWidget):
                 font-weight: bold;
             }
         """)
-
-        # Add sections to the toolbox
+        
         self.add_analysis_section("Ethernet Layer", ["Communication Graph", "MAC Frequency Analysis", "Mac Pairs Analysis ", "Analyze Ethernet Types" , "Detect ARP poisoning","Broadcast Traffic Analysis"])
-
-        # Add the toolbox to the main layout
-        main_layout.addWidget(self.toolbox)
+        self.add_analysis_section("IP Layer", ["IP Communication Graph", "Analyze TTL", "IP Frequency Analysis ", "IP Pair Analysis" , "Traffic Volume Analysis","High Traffic IPs"])
+        
+        self.analysis_layout.addWidget(self.toolbox)
+        self.stacked_widget.addWidget(self.analysis_page)
+        
+        # Set up the main layout
+        main_layout = QVBoxLayout(self)
+        main_layout.addWidget(self.stacked_widget)
         self.setLayout(main_layout)
+        
+        # Variable to hold the selected file path
+        self.selected_file_path = None
+        
+        # Show the choice page initially
+        self.stacked_widget.setCurrentWidget(self.choice_page)
+        
 
+        
     def add_analysis_section(self, title, items):
         # Create a widget for the section
         section_widget = QWidget()
         section_layout = QVBoxLayout(section_widget)
-
+        
         # Create a list widget for the section items
         list_widget = QListWidget()
         list_widget.addItems(items)
         section_layout.addWidget(list_widget)
-
+        
         # Add the section widget to the toolbox
         self.toolbox.addItem(section_widget, title)
-
+        
+    def open_file_dialog(self):
+        if self.file_radio.isChecked():
+            options = QFileDialog.Options()
+            options |= QFileDialog.ReadOnly
+            file_path, _ = QFileDialog.getOpenFileName(self, "Select a File", "", "All Files (*);;Text Files (*.txt)", options=options)
+            
+            if file_path:
+                self.selected_file_path = file_path
+                self.nta = NTA(pcap_file=self.selected_file_path)
+                # Switch to the analysis page
+                self.stacked_widget.setCurrentWidget(self.analysis_page)
+                
+    def next_page(self):
+        if self.file_radio.isChecked():
+            self.open_file_dialog()
+        else:
+            self.nta = NTA(packets=[self.parent.pyshark_to_scapy(packet) for packet in self.parent.packets])
+            self.stacked_widget.setCurrentWidget(self.analysis_page)
+        
+        self.ether_analyser = EtherAnalyzer(self.nta.data)
+        self.ip_analyser = IpAnalyzer(self.nta.data)
+        print(self.ether_analyser.ether_data)
+        print(self.ip_analyser.ip_data)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
