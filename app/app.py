@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (
     , QDialog , QTextEdit , QToolBox , QListWidget , QFormLayout , QMessageBox , QTreeView, QFileSystemModel , QMenu
 )
 from PyQt5.QtCore import Qt, QMetaObject, Q_ARG, pyqtSlot ,  QThread, pyqtSignal
-from scapy.all import  IP_PROTOS  , Ether , wrpcap
+from scapy.all import  IP_PROTOS  , Ether , wrpcap , hexdump
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import QThread, pyqtSignal 
 
@@ -19,10 +19,6 @@ from services.dns import DNS
 from monitoring.logger import Logger
 
 
-"""
-        ADD MORE SCANS IN THE RECON , USE NMAP
-
-"""
 class SnifferThread(QThread):
     packet_received = pyqtSignal(object)
 
@@ -72,7 +68,7 @@ class PacketDetailsWindow(QDialog):
         self.packet_text = QTextEdit(self)
         self.packet_text.setReadOnly(True)
 
-        formatted_packet = self.format_packet(packet)
+        formatted_packet = self.format_packet(packet) + "\n Hex Dump : \n \n " +hexdump(Ether(bytes(packet.get_raw_packet())), dump=True)
         
         # Add the formatted packet details to the QTextEdit
         self.packet_text.setPlainText(formatted_packet)
@@ -94,6 +90,7 @@ class PacketDetailsWindow(QDialog):
         packet.show()
 
         sys.stdout = sys.__stdout__
+
 
         captured_output = output_buffer.getvalue()
 
