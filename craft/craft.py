@@ -192,6 +192,7 @@ class PacketCrafter:
             print("No packet crafted to send.")
         self.packet = None
 
+
 class PacketCrafterApp(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -266,6 +267,8 @@ class PacketCrafterApp(QMainWindow):
             background-color: #344953;
             color: #FFFFFF;
         """)
+        self.ether_type_combo.setFixedWidth(300)  # Adjust width as needed
+
         self.add_form_row("Ethernet Type:", self.ether_type_combo, self.ethernet_form_layout)
 
         self.page1_layout.addLayout(self.ethernet_form_layout)
@@ -380,6 +383,8 @@ class PacketCrafterApp(QMainWindow):
             background-color: #344953;
             color: #FFFFFF;
         """)
+        self.ip_proto_combo.setFixedWidth(300)  # Adjust width as needed
+
         self.add_form_row("Protocol:", self.ip_proto_combo, self.ip_form_layout)
 
         self.page2_layout.addLayout(self.ip_form_layout)
@@ -408,6 +413,10 @@ class PacketCrafterApp(QMainWindow):
         self.udp_button.setStyleSheet(button_style)
         self.icmp_button.setStyleSheet(button_style)
 
+        self.tcp_button.clicked.connect(lambda: self.show_protocol_page("TCP"))
+        self.udp_button.clicked.connect(lambda: self.show_protocol_page("UDP"))
+        self.icmp_button.clicked.connect(lambda: self.show_protocol_page("ICMP"))
+
         self.page3_layout.addWidget(self.tcp_button)
         self.page3_layout.addWidget(self.udp_button)
         self.page3_layout.addWidget(self.icmp_button)
@@ -416,11 +425,242 @@ class PacketCrafterApp(QMainWindow):
         self.stacked_widget.addWidget(self.page1)
         self.stacked_widget.addWidget(self.page2)
         self.stacked_widget.addWidget(self.page3)
+        
+    def show_protocol_page(self, protocol):
+        """Show the selected protocol page and remove any existing protocol pages."""
+        
+        # Define the protocol pages in a dictionary
+        pages = {
+            'TCP': 'tcp_page',
+            'UDP': 'udp_page',
+            'ICMP': 'icmp_page'
+        }
+        
+        # Get the page to show
+        current_page_attr = pages.get(protocol, None)
+        
+        if current_page_attr:
+            # Iterate through all protocol pages
+            for key, attr in pages.items():
+                if key != protocol:
+                    # Remove pages that are not the current one
+                    page = getattr(self, attr, None)
+                    if page:
+                        self.stacked_widget.removeWidget(page)
+                        # Optionally delete the page if it's not needed anymore
+                        page.deleteLater()
+                        setattr(self, attr, None)
+
+
+
+            # Create and add the current page if it does not exist
+            current_page = getattr(self, current_page_attr, None)
+            if not current_page:
+                create_page = getattr(self, f'create_{protocol.lower()}_page')
+                current_page = create_page()
+                setattr(self, current_page_attr, current_page)
+                self.stacked_widget.addWidget(current_page)
+            
+            # Set the current page widget
+            self.stacked_widget.setCurrentWidget(current_page)
+        else:
+            print(f"Protocol page creation method not found for {protocol}")
+
+    def create_tcp_page(self):
+        """Create the TCP page layout."""
+        page = QWidget()
+        layout = QVBoxLayout()
+        page.setLayout(layout)
+        
+        layout.addWidget(self.create_header("TCP Layer"))
+
+        # TCP Form
+        tcp_form_layout = QFormLayout()
+        tcp_form_layout.setLabelAlignment(Qt.AlignRight)
+        tcp_form_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        
+        # TCP Source Port Input
+        self.tcp_src_port_input = QLineEdit()
+        self.tcp_src_port_input.setStyleSheet("""
+            padding: 8px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.add_form_row("Source Port:", self.tcp_src_port_input, tcp_form_layout)
+
+        # TCP Destination Port Input
+        self.tcp_dst_port_input = QLineEdit()
+        self.tcp_dst_port_input.setStyleSheet("""
+            padding: 8px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.add_form_row("Destination Port:", self.tcp_dst_port_input, tcp_form_layout)
+
+        # TCP Sequence Number Input
+        self.tcp_seq_input = QLineEdit("0")
+        self.tcp_seq_input.setStyleSheet("""
+            padding: 8px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.add_form_row("Sequence Number:", self.tcp_seq_input, tcp_form_layout)
+
+        # TCP Acknowledgement Number Input
+        self.tcp_ack_input = QLineEdit("0")
+        self.tcp_ack_input.setStyleSheet("""
+            padding: 8px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.add_form_row("Acknowledgement Number:", self.tcp_ack_input, tcp_form_layout)
+
+        # TCP Flags Input
+        self.tcp_flags_input = QLineEdit()
+        self.tcp_flags_input.setStyleSheet("""
+            padding: 8px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.add_form_row("Flags:", self.tcp_flags_input, tcp_form_layout)
+
+        layout.addLayout(tcp_form_layout)
+        return page
+
+    def create_udp_page(self):
+        """Create the UDP page layout."""
+        page = QWidget()
+        layout = QVBoxLayout()
+        page.setLayout(layout)
+        
+        layout.addWidget(self.create_header("UDP Layer"))
+
+        # UDP Form
+        udp_form_layout = QFormLayout()
+        udp_form_layout.setLabelAlignment(Qt.AlignRight)
+        udp_form_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        
+        # UDP Source Port Input
+        self.udp_src_port_input = QLineEdit()
+        self.udp_src_port_input.setStyleSheet("""
+            padding: 8px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.add_form_row("Source Port:", self.udp_src_port_input, udp_form_layout)
+
+        # UDP Destination Port Input
+        self.udp_dst_port_input = QLineEdit()
+        self.udp_dst_port_input.setStyleSheet("""
+            padding: 8px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.add_form_row("Destination Port:", self.udp_dst_port_input, udp_form_layout)
+
+        # UDP Length Input
+        self.udp_length_input = QLineEdit()
+        self.udp_length_input.setStyleSheet("""
+            padding: 8px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.add_form_row("Length:", self.udp_length_input, udp_form_layout)
+
+
+        layout.addLayout(udp_form_layout)
+        return page
+
+    def create_icmp_page(self):
+        """Create the ICMP page layout."""
+        page = QWidget()
+        layout = QVBoxLayout()
+        page.setLayout(layout)
+        
+        layout.addWidget(self.create_header("ICMP Layer"))
+
+        # ICMP Type Combobox
+        self.icmp_type_combobox = QComboBox()
+        self.icmp_type_combobox.setStyleSheet("""
+            padding: 4px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.icmp_type_combobox.setFixedWidth(300)  # Adjust width as needed
+        
+        # Populate ICMP Type Combobox
+        for type_name, type_info in PacketCrafter.icmp_types_and_codes.items():
+            self.icmp_type_combobox.addItem(type_name, type_info["type"])
+
+        # ICMP Code Combobox
+        self.icmp_code_combobox = QComboBox()
+        self.icmp_code_combobox.setStyleSheet("""
+            padding: 4px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.icmp_code_combobox.setFixedWidth(300)  # Adjust width as needed
+        
+        # Populate ICMP Code Combobox based on selected ICMP Type
+        self.icmp_type_combobox.currentIndexChanged.connect(self.update_icmp_code_combobox)
+        
+        # Layout for ICMP Type and Code
+        icmp_layout = QFormLayout()
+        icmp_layout.setLabelAlignment(Qt.AlignRight)
+        icmp_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        
+        icmp_layout.addRow(QLabel("Type:"), self.icmp_type_combobox)
+        icmp_layout.addRow(QLabel("Code:"), self.icmp_code_combobox)
+
+        layout.addLayout(icmp_layout)
+        return page
+
+    def update_icmp_code_combobox(self):
+        """Update the ICMP Code combobox based on the selected ICMP Type."""
+        selected_type_name = self.icmp_type_combobox.currentText()
+        type_info = PacketCrafter.icmp_types_and_codes.get(selected_type_name, {})
+        
+        self.icmp_code_combobox.clear()
+        
+        if isinstance(type_info, dict):
+            if "codes" in type_info:
+                for code_name in type_info["codes"]:
+                    self.icmp_code_combobox.addItem(code_name)
+            else:
+                self.icmp_code_combobox.addItem(str(type_info["code"]))
+        else:
+            # Handle case where type_info is not a dict (e.g., if it's an integer)
+            self.icmp_code_combobox.addItem(f"Code: {type_info}")
+
+        # Optionally set default or first item as selected
+        self.icmp_code_combobox.setCurrentIndex(0)
 
     def add_form_row(self, label_text, widget, layout):
-        """Add a label and widget to the provided layout with consistent styling."""
+        """Add a row to a form layout with a label and a widget."""
         label = QLabel(label_text)
-        label.setStyleSheet("color: #FFFFFF;")
+        label.setStyleSheet("""
+            color: #FFFFFF;
+        """)
         layout.addRow(label, widget)
 
     def create_header(self, text):
@@ -433,7 +673,7 @@ class PacketCrafterApp(QMainWindow):
             margin-bottom: 20px;
         """)
         return header
-
+    
     def init_navigation_buttons(self):
         """Initialize navigation buttons at the bottom of the main layout."""
         self.navigation_layout = QHBoxLayout()
@@ -470,14 +710,14 @@ class PacketCrafterApp(QMainWindow):
         if current_index > 0:
             self.stacked_widget.setCurrentIndex(current_index - 1)
             self.update_navigation_buttons()
-
+    
     def go_next(self):
         """Handle the next button click."""
         current_index = self.stacked_widget.currentIndex()
         if current_index < self.stacked_widget.count() - 1:
             self.stacked_widget.setCurrentIndex(current_index + 1)
         self.update_navigation_buttons()
-
+    
     def update_navigation_buttons(self):
         """Update the navigation buttons visibility based on the current page."""
         current_index = self.stacked_widget.currentIndex()
@@ -490,7 +730,7 @@ class PacketCrafterApp(QMainWindow):
 
         # Disable the 'Previous' button on the first page
         self.prev_button.setEnabled(current_index > 0)
-        
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     main_window = PacketCrafterApp()
