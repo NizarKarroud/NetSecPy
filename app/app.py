@@ -17,7 +17,7 @@ from recon.scan import Scanner
 from services.dhcp import DHCP
 from services.dns import DNS
 from monitoring.logger import Logger
-from visualization.main import NTA , EtherAnalyzer , IpAnalyzer
+from visualization.main import NTA , EtherAnalyzer , IpAnalyzer , TransportAnalyzer
 
 class SnifferThread(QThread):
     packet_received = pyqtSignal(object)
@@ -29,7 +29,7 @@ class SnifferThread(QThread):
         self.stop_sniffing = False
     
     def run(self):
-        # Create and set up an asyncio event loop in this thread
+
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
@@ -61,22 +61,22 @@ class PacketDetailsWindow(QDialog):
         self.setWindowTitle("Packet Details")
         self.setGeometry(100, 100, 1024, 768)
 
-        # Create a layout
+
         layout = QVBoxLayout()
 
-        # Create a QTextEdit widget to display packet details
+
         self.packet_text = QTextEdit(self)
         self.packet_text.setReadOnly(True)
 
         formatted_packet = self.format_packet(packet) + "\n Hex Dump : \n \n " +hexdump(Ether(bytes(packet.get_raw_packet())), dump=True)
         
-        # Add the formatted packet details to the QTextEdit
+
         self.packet_text.setPlainText(formatted_packet)
 
-        # Add the QTextEdit to the layout
+
         layout.addWidget(self.packet_text)
 
-        # Set the layout for the dialog
+
         self.setLayout(layout)
 
     def format_packet(self , pyshark_packet):
@@ -105,44 +105,44 @@ class ScriptWindow(QDialog):
         self.service = service
         self.script_name = script_name
 
-        # Set the title and geometry of the window
+
         self.setWindowTitle(f"Script: {script_name}")
         self.setGeometry(100, 100, 800, 600)
 
-        # Create a layout for the window
+
         layout = QVBoxLayout(self)
 
-        # Add a label to display the selected script name
+
         script_label = QLabel(f"Selected Script: {script_name}")
         layout.addWidget(script_label)
 
-        # Add a section for the command and its arguments
+
         if script_name in service.scripts:
-            # Command for the selected script
+
             command = service.scripts[script_name]["command"]
 
-            # Display the command
+
             command_str = ' '.join(command)
             command_label = QLabel(f"Command: {command_str}")
             layout.addWidget(command_label)
 
-            # Arguments handling
-            if service.scripts[script_name].get("argument", False):
-                self.arg_input = QLineEdit()  # Input field for target argument
-                layout.addWidget(QLabel("Target:"))  # Label for argument
-                layout.addWidget(self.arg_input)  # Input field for the argument
 
-        # Text area to display the output of the script
+            if service.scripts[script_name].get("argument", False):
+                self.arg_input = QLineEdit()  
+                layout.addWidget(QLabel("Target:"))  
+                layout.addWidget(self.arg_input)  
+
+
         self.result_text_area = QTextEdit()
-        self.result_text_area.setReadOnly(True)  # Output area should be read-only
+        self.result_text_area.setReadOnly(True)  
         layout.addWidget(self.result_text_area)
 
-        # Execute button to run the script
+
         execute_button = QPushButton("Execute")
         execute_button.clicked.connect(self.execute_script)
         layout.addWidget(execute_button)
 
-        # Close button to close the dialog
+
         close_button = QPushButton("Close")
         close_button.clicked.connect(self.accept)
         layout.addWidget(close_button)
@@ -161,17 +161,17 @@ class ResultWindow(QDialog):
     def __init__(self, response, parent=None):
         super(ResultWindow, self).__init__(parent)
 
-        # Set the title and geometry of the window
+
         self.setWindowTitle("Scan Results")
         self.setGeometry(100, 100, 1024, 768)
 
-        # Create a layout for the dialog
+
         layout = QVBoxLayout()
 
-        # Add a QTextEdit to display the response
+
         text_edit = QTextEdit()
-        text_edit.setReadOnly(True)  # Make it read-only
-        text_edit.setText(response)  # Display the response
+        text_edit.setReadOnly(True)  
+        text_edit.setText(response)  
         layout.addWidget(text_edit)
 
         self.setLayout(layout)
@@ -183,71 +183,71 @@ class SnifferApp(QMainWindow):
         self.sniffer_thread = None
 
         self.packets = []
-        # Initialize selected interface variable
+
         self.selected_interface = None
 
-        # Initialize pause attribute
+
         self.paused = False
 
         self.setWindowTitle("NetSecPy")
         self.setGeometry(100, 100, 1024, 768)
         self.setStyleSheet("background-color: #2A363B; color: #FFFFFF; font-family: Arial, sans-serif;")
 
-        # Initialize the main layout
+
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
         self.main_layout = QVBoxLayout()
         self.central_widget.setLayout(self.main_layout)
 
-        # Create menu bar
+
         self.menu_bar = QMenuBar(self)
         self.setMenuBar(self.menu_bar)
         self.menu_bar.setStyleSheet("background-color: #2A363B; color: #FFFFFF; padding: 5px;border-bottom: 1px solid #000000;")
 
 
 
-        # Documentation Menu
+
         documentation_menu = self.menu_bar.addMenu("Documentation")
         documentation_menu.setStyleSheet("padding: 5px;")
         docs_action = QAction("Open Documentation", self)
         docs_action.triggered.connect(self.open_documentation)
         documentation_menu.addAction(docs_action)
 
-        # Add Status Bar
+
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
         self.status_bar.setStyleSheet("background-color: #2A363B; color: #FFFFFF; padding: 5px;")
 
-        # Add header and next button layout
+
         self.setup_header()
 
-        # Add Network Interfaces List
+
         self.setup_interface_list()
 
     def setup_header(self):
-        # Create a horizontal layout for the header
+
         header_layout = QHBoxLayout()
 
-        # Header Label
+
         self.header_label = QLabel("Select Network Interface", self)
         self.header_label.setStyleSheet("font-size: 24px; font-weight: bold; margin: 20px;")
         self.header_label.setAlignment(Qt.AlignLeft)
 
-        # Next Button
+
         self.next_button = QPushButton("Next →", self)
         self.next_button.setStyleSheet("font-size: 16px; padding: 10px; background-color: #E84A5F; color: #FFFFFF;")
         self.next_button.clicked.connect(self.go_to_next_page)
         self.next_button.setFixedSize(100, 40)
 
-        # Add widgets to the header layout
+
         header_layout.addWidget(self.header_label)
         header_layout.addWidget(self.next_button, alignment=Qt.AlignRight)
 
-        # Add the header layout to the main layout
+
         self.main_layout.addLayout(header_layout)
     
     def setup_interface_list(self):
-        # Create a scroll area for the interface list
+
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
@@ -277,20 +277,20 @@ class SnifferApp(QMainWindow):
             }
         """)
 
-        # Create a container widget for the scroll area
+
         scroll_content = QWidget()
         scroll_layout = QVBoxLayout(scroll_content)
         scroll_area.setWidget(scroll_content)
 
-        # Add the scroll area to the main layout
+
         self.main_layout.addWidget(scroll_area)
 
-        # Button group for selecting interfaces
+
         self.interface_group = QButtonGroup()
 
         interfaces = psutil.net_if_addrs().items()
 
-        # Dictionary to store interface data
+
         self.interface_data = {}
 
         for interface_name, interface_addresses in interfaces:
@@ -298,17 +298,17 @@ class SnifferApp(QMainWindow):
             interface_frame.setStyleSheet("background-color: #202C31; border-radius: 10px; margin: 10px; padding: 10px;")
             interface_layout = QHBoxLayout(interface_frame)
 
-            # Radio button to select interface
+
             radio_button = QRadioButton(interface_name, self)
             radio_button.setStyleSheet("font-size: 18px; color: #FFFFFF;")
             self.interface_group.addButton(radio_button)
             interface_layout.addWidget(radio_button)
 
-            # Initialize data storage
+
             ip_address = None
             mac_address = None
 
-            # IP and MAC address labels
+
             for address in interface_addresses:
                 if address.family == socket.AF_INET:
                     ip_address = address.address
@@ -321,37 +321,37 @@ class SnifferApp(QMainWindow):
                     mac_label.setStyleSheet("font-size: 16px; color: #AAAAAA; margin-left: 20px;")
                     interface_layout.addWidget(mac_label)
 
-            # Save the interface data
+
             self.interface_data[interface_name] = {
                 'ip': ip_address,
                 'mac': mac_address,
                 'netmask' : address.netmask
             }
 
-            # Add the frame to the scrollable layout
+
             scroll_layout.addWidget(interface_frame)
 
-        # Status Bar update example
+
         self.status_bar.showMessage("Monitoring network interfaces.")
 
     def go_to_next_page(self):
-        # Get the selected interface
+
         selected_button = self.interface_group.checkedButton()
         if selected_button:
             self.selected_interface = selected_button.text()
-            # Retrieve the IP and MAC for the selected interface
+
             self.selected_ip = self.interface_data[self.selected_interface]['ip']
             self.selected_mac = self.interface_data[self.selected_interface]['mac']
             self.selected_subent = self.interface_data[self.selected_interface]['netmask']
             
             self.scanner = Scanner(self.selected_mac.replace("-",":"), self.selected_ip ,self.selected_subent ) 
-            # Proceed to the next page 
+
             self.show_next_page()
         else:
             self.status_bar.showMessage("Please select an interface before proceeding.")
 
     def show_next_page(self):
-        # File Menu
+
         file_menu = self.menu_bar.addMenu("File")
         file_menu.setStyleSheet("padding: 5px;")
         open_action = QAction("Export as pcap", self)
@@ -367,15 +367,15 @@ class SnifferApp(QMainWindow):
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
         
-        # Remove and delete the current central widget
+
         if self.central_widget is not None:
             self.central_widget.setParent(None)
 
-        # Create a QTabWidget
+
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
 
-        # Style the tabs
+
         self.tabs.setStyleSheet("""
             QTabBar::tab {
                 background: #E84A5F;
@@ -397,7 +397,7 @@ class SnifferApp(QMainWindow):
             }
         """)
 
-        # Create tabs for each section
+
         self.add_sniffer_tab()
 
         self.recon_tab = ReconTab(scanner=self.scanner)
@@ -414,7 +414,7 @@ class SnifferApp(QMainWindow):
         self.tabs.addTab(self.log_tab, "Logs")
 
     def open_script_window(self, item, service):
-        # Create an instance of the ScriptWindow class
+
         script_window = ScriptWindow(service, item.text(), self)
         script_window.exec_()
 
@@ -425,7 +425,7 @@ class SnifferApp(QMainWindow):
         script_list.addItems([script for script in service.scripts.keys()])
         service_layout.addWidget(script_list)
         
-        # Connect the script selection to open a new window, passing the correct service
+
         script_list.itemClicked.connect(lambda item: self.open_script_window(item, service))
 
         self.services_toolbox.addItem(service_widget, title)
@@ -450,7 +450,7 @@ class SnifferApp(QMainWindow):
                 font-weight: bold;
             }
         """)
-        # Example services with a list of scripts
+
         dhcp_scanner = DHCP()
         dns_scanner = DNS()
 
@@ -467,11 +467,11 @@ class SnifferApp(QMainWindow):
         self.tabs.addTab(tab, title)
 
     def add_sniffer_tab(self):
-        # Create a new QWidget for the Sniffer tab
+
         sniffer_tab = QWidget()
         layout = QVBoxLayout(sniffer_tab)
 
-        # Add a horizontal layout for the filter input and button
+
         filter_layout = QHBoxLayout()
 
         self.filter_input = QLineEdit(self)
@@ -488,7 +488,7 @@ class SnifferApp(QMainWindow):
         """)
         filter_layout.addWidget(self.filter_input)
 
-        # Create the Apply Filter button
+
         self.apply_filter_button = QPushButton("Apply Filter", self)
         self.apply_filter_button.setStyleSheet("""
             QPushButton {
@@ -510,19 +510,19 @@ class SnifferApp(QMainWindow):
 
         self.apply_filter_button.clicked.connect(self.apply_filters)
 
-        # Add the filter layout to the main layout
+
         layout.addLayout(filter_layout)
 
-        # Create a QTableWidget to display captured packets
+
         self.sniffer_table = QTableWidget(sniffer_tab)
         self.sniffer_table.setColumnCount(8) 
         self.sniffer_table.setHorizontalHeaderLabels(["Timestamp" ,"Source IP", "Destination IP", "Protocol", "Length", "Source Port", "Destination Port","More Info"])
 
-        # Set column width to fit the table
+
         self.sniffer_table.horizontalHeader().setStretchLastSection(True)
         self.sniffer_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
-        # Customize header color
+
         self.sniffer_table.horizontalHeader().setStyleSheet("""
             QHeaderView::section {
                 background-color: #99B898;
@@ -589,17 +589,17 @@ class SnifferApp(QMainWindow):
 
         layout.addWidget(self.sniffer_table)
 
-        # Add the pause/resume button
+
         self.pause_button = QPushButton("Pause", self)
         self.pause_button.setStyleSheet("font-size: 16px; padding: 10px; background-color: #202C31 ; color: #FFFFFF; ")
         self.pause_button.clicked.connect(self.toggle_pause)
         layout.addWidget(self.pause_button)
 
-        # Add sniffer tab to the tabs widget
+
         self.tabs.addTab(sniffer_tab, "Sniffer")
 
         self.logger = Logger()
-        # Start the sniffing thread
+
         self.start_sniffing()
 
     def toggle_pause(self):
@@ -635,11 +635,11 @@ class SnifferApp(QMainWindow):
             length = len(packet)
             
             try:
-                # Check if the protocol exists in the packet
+
                 if hasattr(packet, proto):
                     layer = getattr(packet, proto)
                     
-                    # Safely get srcport and dstport if they exist
+
                     src_port = str(getattr(layer, 'srcport', None)) if hasattr(layer, 'srcport') else None
                     dst_port = str(getattr(layer, 'dstport', None)) if hasattr(layer, 'dstport') else None
 
@@ -651,7 +651,7 @@ class SnifferApp(QMainWindow):
                 src_port = None
                 dst_port = None
 
-        # Use a signal-slot mechanism to update the table from the main thread
+
             QMetaObject.invokeMethod(
                 self, "update_table",
                 Qt.QueuedConnection,
@@ -707,7 +707,7 @@ class SnifferApp(QMainWindow):
             """)
             more_info_button.clicked.connect(lambda : self.show_packet(packet))
 
-            # Set the button in the "More Info" column
+
             self.sniffer_table.setCellWidget(row_position, 7, more_info_button)
 
     def show_packet(self,packet):
@@ -738,29 +738,29 @@ class SnifferApp(QMainWindow):
                     writer.writerow(row_data)
 
     def export_as_json(self):
-        # Open a file dialog to choose where to save the JSON file
+
         file_name, _ = QFileDialog.getSaveFileName(self, "Save JSON File", "", "JSON Files (*.json)")
         
         if file_name:
             data = []
-            # Iterate over each row in the table
+
             for row in range(self.sniffer_table.rowCount()):
                 row_data = {}
                 for col in range(7):
                     item = self.sniffer_table.item(row, col)
                     
-                    # Check if item is valid and a QTableWidgetItem
+
                     if isinstance(item, QTableWidgetItem):
-                        header = self.sniffer_table.horizontalHeaderItem(col).text()  # Get the column header
+                        header = self.sniffer_table.horizontalHeaderItem(col).text()  
                         row_data[header] = item.text()
                     else:
-                        header = self.sniffer_table.horizontalHeaderItem(col).text()  # Get the column header
+                        header = self.sniffer_table.horizontalHeaderItem(col).text() 
                         row_data[header] = ""
                 
-                # Add the row data to the list
+
                 data.append(row_data)
             
-            # Write the data to a JSON file
+
             with open(file_name, 'w', newline='') as file:
                 json.dump(data, file, indent=4)
                 
@@ -769,7 +769,7 @@ class SnifferApp(QMainWindow):
 
     def pyshark_to_scapy(self , pyshark_packet):
         raw_bytes = bytes(pyshark_packet.get_raw_packet())
-        # Create a Scapy packet from the raw bytes
+
         scapy_packet = Ether(raw_bytes)
         return scapy_packet
     
@@ -783,7 +783,7 @@ class SnifferApp(QMainWindow):
         if os.path.exists("temp.pcap"):
             os.remove("temp.pcap")
     
-        # Call the base class implementation
+
         event.accept()
 
 class LoggerTab(QWidget):
@@ -796,12 +796,12 @@ class LoggerTab(QWidget):
         layout = QVBoxLayout()
 
         logs_dir_label = QLabel(f"{self.logs_dir}")
-        logs_dir_label.setAlignment(Qt.AlignCenter)  # Center the label text
-        logs_dir_label.setStyleSheet("font-weight: bold;")  # Make the text bold
+        logs_dir_label.setAlignment(Qt.AlignCenter)
+        logs_dir_label.setStyleSheet("font-weight: bold;")  
 
         layout.addWidget(logs_dir_label)
 
-        # Create a button that opens the file explorer at the logs directory
+
         open_button = QPushButton("Open in File Explorer")
         open_button.setStyleSheet("""
             QPushButton {
@@ -822,11 +822,10 @@ class LoggerTab(QWidget):
         open_button.clicked.connect(self.open_file_explorer)
         layout.addWidget(open_button)
 
-        # Set up file system model
+
         self.model = QFileSystemModel()
         self.model.setRootPath(self.logs_dir)
 
-        # Create a tree view and set its model
         self.tree = QTreeView()
         self.tree.setStyleSheet("""
             QHeaderView::section {
@@ -840,7 +839,7 @@ class LoggerTab(QWidget):
         self.tree.setRootIndex(self.model.index(self.logs_dir))
         self.tree.setColumnWidth(0, 250)
 
-        # Add the tree view to the layout
+
         layout.addWidget(self.tree)
         
         self.setLayout(layout)
@@ -860,7 +859,7 @@ class ReconTab(QWidget):
         self.stacked_widget = QStackedWidget()
         self.main_menu_page = self.create_main_menu_page()
 
-        # Scan types and their corresponding function names
+
         scan_types = {
             'ARP Scan': self.scanner.arp_scan,
             'TCP SYN Scan': self.scanner.tcp_syn_scan,
@@ -875,13 +874,13 @@ class ReconTab(QWidget):
             'OS Detection' :self.scanner.os
         }
 
-        # Create pages for each scan type
+
         for scan_name, scan_function in scan_types.items():
             page = ScanPage(scan_name, self.show_main_menu, scan_function)
             self.pages[scan_name] = page
             self.stacked_widget.addWidget(page)
 
-        # Add main menu to the stacked widget
+
         self.stacked_widget.addWidget(self.main_menu_page)
         
         self.stacked_widget.setCurrentWidget(self.main_menu_page)
@@ -946,10 +945,10 @@ class ScanPage(QWidget):
         self.page_layout = QVBoxLayout(self)
         self.input_fields = {}
 
-        # Dynamically create input fields based on the scan function
+
         self.create_input_fields()
 
-        # Add an Execute button
+
         self.execute_button = QPushButton(f"Execute {scan_name}")
         self.execute_button.setStyleSheet("""
             QPushButton {
@@ -963,12 +962,12 @@ class ScanPage(QWidget):
         self.execute_button.clicked.connect(self.execute_scan)
         self.page_layout.addWidget(self.execute_button)
 
-        # Text area to display results
+
         self.result_area = QTextEdit()
         self.result_area.setReadOnly(True)
         self.page_layout.addWidget(self.result_area)
        
-        # Add a back button
+
         self.back_button = QPushButton("Back to Menu")
         self.back_button.setStyleSheet("""
             QPushButton {
@@ -993,14 +992,14 @@ class ScanPage(QWidget):
             if param_name == 'self':
                 continue
 
-            # Create a label for the parameter
+
             label = QLabel(f"{param_name.capitalize()}:")
             self.page_layout.addWidget(label)
 
-            # Create a line edit for the parameter
+
             line_edit = QLineEdit()
 
-            # Set the default value if available
+
             if param.default is not param.empty:
                 line_edit.setText(str(param.default))
 
@@ -1015,12 +1014,12 @@ class ScanPage(QWidget):
         for param_name, line_edit in self.input_fields.items():
             value = line_edit.text()
 
-            # Determine the type of the parameter
+
             param = function_signature.parameters.get(param_name)
             if param:
                 param_type = param.annotation
 
-                # Convert value based on type hint
+
                 if param_type is int:
                     args.append(int(value) if value else param.default)
                 elif param_type is str:
@@ -1044,30 +1043,46 @@ class AnalysisTab(QWidget):
         self.parent = parent
 
     def init_ui(self):
-            # Create the stacked widget to switch between pages
+
             self.stacked_widget = QStackedWidget(self)
             
-            # Create and add the choice page
+
             self.choice_page = QWidget()
             self.choice_layout = QVBoxLayout(self.choice_page)
             
-            # Create radio buttons
+
             self.packet_radio = QRadioButton("Packets")
             self.file_radio = QRadioButton("File")
-            self.file_radio.setChecked(True)  # Set default to "File"
+            self.file_radio.setChecked(True)  
                     
-            # Create the "Next" button
+
             self.next_button = QPushButton("Next")
+            self.next_button.setStyleSheet("""
+            QPushButton {
+                border: 2px solid #202C31;
+                border-radius: 15px;
+                padding: 10px;
+                background-color: #202C31;
+                color: #FFFFFF;
+                font-size: 16px;
+            }
+            QPushButton:hover {
+                background-color: #151D20 ;
+            }
+            QPushButton:pressed {
+                background-color: #151D20;
+            }
+        """)
             self.next_button.clicked.connect(self.next_page)
             
-            # Add widgets to layout
+
             self.choice_layout.addWidget(self.packet_radio)
             self.choice_layout.addWidget(self.file_radio)
             self.choice_layout.addWidget(self.next_button)
             
             self.stacked_widget.addWidget(self.choice_page)
             
-            # Create and add the analysis options page
+
             self.analysis_page = QWidget()
             self.analysis_layout = QVBoxLayout(self.analysis_page)
             self.update_packets_button = QPushButton("Update Packets")
@@ -1076,7 +1091,7 @@ class AnalysisTab(QWidget):
 
             self.analysis_layout.addWidget(self.update_packets_button)
 
-            # Create the toolbox
+
             self.toolbox = QToolBox()
             self.toolbox.setStyleSheet("""
                 QToolBox::tab {
@@ -1093,7 +1108,7 @@ class AnalysisTab(QWidget):
                 }
             """)
             
-            # Add analysis sections
+
             self.add_analysis_section("Ethernet Layer", [
                 "Communication Graph", "MAC Frequency Analysis", "Mac Pairs Analysis", 
                 "Analyze Ethernet Types", "Detect ARP scanning", "Broadcast Traffic Analysis"
@@ -1102,19 +1117,23 @@ class AnalysisTab(QWidget):
                 "IP Communication Graph", "Analyze TTL", "IP Frequency Analysis", 
                 "IP Pair Analysis", "High Traffic IPs"
             ])
+            self.add_analysis_section("Transport Layer", [
+                "Detect UDP port Scanning", "Analyze UDP len", "UDP Port Distribution", 
+                "TCP Flags Distribution", "TCP Port Distribution" , "Unusual TCP Port Activity" , "IP / Port Heatmap"
+            ])
             
             self.analysis_layout.addWidget(self.toolbox)
             self.stacked_widget.addWidget(self.analysis_page)
             
-            # Set up the main layout
+
             main_layout = QVBoxLayout(self)
             main_layout.addWidget(self.stacked_widget)
             self.setLayout(main_layout)
             
-            # Variable to hold the selected file path
+
             self.selected_file_path = None
             
-            # Show the choice page initially
+
             self.stacked_widget.setCurrentWidget(self.choice_page)
 
 
@@ -1130,8 +1149,8 @@ class AnalysisTab(QWidget):
             del self.ip_analyser
         self.nta = NTA(packets=[self.parent.pyshark_to_scapy(packet) for packet in self.parent.packets])
         self.ether_analyser = EtherAnalyzer(self.nta.data)
-        print(self.ether_analyser.ether_data)
         self.ip_analyser = IpAnalyzer(self.nta.data)
+        self.transport_analyser = TransportAnalyzer(self.nta.data)
         self.analysis_methods = {
             "Communication Graph": self.ether_analyser.visualize_ether_communication_graph,
             "MAC Frequency Analysis": self.ether_analyser.mac_frequency_analysis,
@@ -1143,25 +1162,29 @@ class AnalysisTab(QWidget):
             "Analyze TTL": self.ip_analyser.analyze_ttl,
             "IP Frequency Analysis": self.ip_analyser.ip_frequency_analysis,
             "IP Pair Analysis": self.ip_analyser.ip_pair_analysis,
-            "High Traffic IPs": self.ip_analyser.monitor_high_traffic_ips
+            "High Traffic IPs": self.ip_analyser.monitor_high_traffic_ips,
+            "Detect UDP port Scanning" :self.transport_analyser.detect_udp_port_scanning ,
+            "Analyze UDP len" :self.transport_analyser.analyze_udp_lengths ,
+            "UDP Port Distribution" :self.transport_analyser.udp_port_distribution , 
+            "TCP Flags Distribution" : self.transport_analyser.tcp_flags_distribution, 
+            "TCP Port Distribution" : self.transport_analyser.tcp_port_distribution , 
+            "Unusual TCP Port Activity"  : self.transport_analyser.detect_unusual_port_activity , 
+            "IP / Port Heatmap" : self.transport_analyser.analyze_ip_to_port_communication
         }
     
         QMessageBox.information(self, "Update", "Packets updated successfully.")
 
     def add_analysis_section(self, title, items):
-        # Create a widget for the section
+
         section_widget = QWidget()
         section_layout = QVBoxLayout(section_widget)
         
-        # Create a list widget for the section items
         list_widget = QListWidget()
         list_widget.addItems(items)
         section_layout.addWidget(list_widget)
         
-        # Add the section widget to the toolbox
         self.toolbox.addItem(section_widget, title)
         
-        # Connect list widget item selection to analysis methods
         list_widget.itemClicked.connect(self.handle_analysis_selection)
         
     def open_file_dialog(self):
@@ -1173,7 +1196,7 @@ class AnalysisTab(QWidget):
             if file_path:
                 self.selected_file_path = file_path
                 self.nta = NTA(pcap_file=self.selected_file_path)
-                # Switch to the analysis page
+
                 self.stacked_widget.setCurrentWidget(self.analysis_page)
                 
     def next_page(self):
@@ -1183,12 +1206,11 @@ class AnalysisTab(QWidget):
             self.update_packets_button.setVisible(True)  # Show the button
             self.nta = NTA(packets=[self.parent.pyshark_to_scapy(packet) for packet in self.parent.packets])
             self.stacked_widget.setCurrentWidget(self.analysis_page)
-
+   
         self.ether_analyser = EtherAnalyzer(self.nta.data)
         self.ip_analyser = IpAnalyzer(self.nta.data)
-        print(self.ether_analyser.ether_data)
-
-        # Mapping of analysis options to methods
+        self.transport_analyser = TransportAnalyzer(self.nta.data)
+        
         self.analysis_methods = {
             "Communication Graph": self.ether_analyser.visualize_ether_communication_graph,
             "MAC Frequency Analysis": self.ether_analyser.mac_frequency_analysis,
@@ -1200,7 +1222,15 @@ class AnalysisTab(QWidget):
             "Analyze TTL": self.ip_analyser.analyze_ttl,
             "IP Frequency Analysis": self.ip_analyser.ip_frequency_analysis,
             "IP Pair Analysis": self.ip_analyser.ip_pair_analysis,
-            "High Traffic IPs": self.ip_analyser.monitor_high_traffic_ips
+            "High Traffic IPs": self.ip_analyser.monitor_high_traffic_ips ,
+            "Detect UDP port Scanning" :self.transport_analyser.detect_udp_port_scanning ,
+            "Analyze UDP len" :self.transport_analyser.analyze_udp_lengths ,
+            "UDP Port Distribution" :self.transport_analyser.udp_port_distribution , 
+            "TCP Flags Distribution" : self.transport_analyser.tcp_flags_distribution, 
+            "TCP Port Distribution" : self.transport_analyser.tcp_port_distribution , 
+            "Unusual TCP Port Activity"  : self.transport_analyser.detect_unusual_port_activity , 
+            "IP / Port Heatmap" : self.transport_analyser.analyze_ip_to_port_communication
+
         }
     
     def handle_analysis_selection(self, item):
@@ -1208,18 +1238,16 @@ class AnalysisTab(QWidget):
         try:
             method = self.analysis_methods.get(selected_analysis)
             if method:
-                result = method()  # Call the corresponding method
-                print(type(result))
+                result = method() 
                 if isinstance(result, pd.DataFrame):
-                    # Single DataFrame case
+
                     self.prompt_save_dataframe(result)
                     
                 elif isinstance(result, tuple) and all(isinstance(df, pd.DataFrame) for df in result):
-                    # Tuple of DataFrames case
+
                     for i, df in enumerate(result):
                         self.prompt_save_dataframe(df, index=i + 1)
-
-                        
+          
             else:
                 raise ValueError(f"Unknown analysis type: {selected_analysis}")
         
@@ -1228,17 +1256,17 @@ class AnalysisTab(QWidget):
 
 
     def prompt_save_dataframe(self, dataframe, index=None):
-        # Ask user if they want to save the dataframe
+
         reply = QMessageBox.question(self, 'Save Data', 'Do you want to save the dataframe as a CSV file?', QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         
         if reply == QMessageBox.Yes:
-            # Prompt the user for the file name and save location
+
             options = QFileDialog.Options()
             default_name = f"dataframe_{index}.csv" if index else "dataframe.csv"
             file_path, _ = QFileDialog.getSaveFileName(self, "Save CSV File", default_name, "CSV Files (*.csv);;All Files (*)", options=options)
             
             if file_path:
-                dataframe.to_csv(file_path, index=False)  # Save the DataFrame as CSV
+                dataframe.to_csv(file_path, index=False) 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

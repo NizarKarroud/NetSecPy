@@ -16,14 +16,14 @@ class Scanner:
         try:
             command = ["nmap", "-sn" , "-PR" ,self.__network]
 
-            # Run the command and capture the output
+
             result = subprocess.run(command, capture_output=True, text=True)
 
-            # Check for errors
+
             if result.returncode != 0:
                 print(f"Error running  scan: {result.stderr}")
             else:
-                # Print the output of the scan
+
                 return result.stdout
 
         except Exception as e:
@@ -86,14 +86,14 @@ class Scanner:
         try:
             command = ["nmap", "--traceroute"  , target_ip]
 
-            # Run the command and capture the output
+
             result = subprocess.run(command, capture_output=True, text=True)
 
-            # Check for errors
+
             if result.returncode != 0:
                 print(f"Error running scan: {result.stderr}")
             else:
-                # Print the output of the scan
+
                 return result.stdout
 
         except Exception as e:
@@ -103,14 +103,14 @@ class Scanner:
         try:
             command = ["nmap", "-Pn" , "-sI" , zombie_ip, target_ip]
 
-            # Run the command and capture the output
+
             result = subprocess.run(command, capture_output=True, text=True)
 
-            # Check for errors
+
             if result.returncode != 0:
                 print(f"Error running scan: {result.stderr}")
             else:
-                # Print the output of the scan
+
                 return result.stdout
 
         except Exception as e:
@@ -120,14 +120,14 @@ class Scanner:
         try:
             command = ["nmap", "-sF"  , target_ip]
 
-            # Run the command and capture the output
+
             result = subprocess.run(command, capture_output=True, text=True)
 
-            # Check for errors
+
             if result.returncode != 0:
                 print(f"Error running scan: {result.stderr}")
             else:
-                # Print the output of the scan
+
                 return result.stdout
 
         except Exception as e:
@@ -137,14 +137,14 @@ class Scanner:
         try:
             command = ["nmap", "-sN"  , target_ip]
 
-            # Run the command and capture the output
+
             result = subprocess.run(command, capture_output=True, text=True)
 
-            # Check for errors
+
             if result.returncode != 0:
                 print(f"Error running scan: {result.stderr}")
             else:
-                # Print the output of the scan
+
                 return result.stdout
 
         except Exception as e:
@@ -154,14 +154,14 @@ class Scanner:
         try:
             command = ["nmap", "-sX"  , target_ip]
 
-            # Run the command and capture the output
+
             result = subprocess.run(command, capture_output=True, text=True)
 
-            # Check for errors
+
             if result.returncode != 0:
                 print(f"Error running scan: {result.stderr}")
             else:
-                # Print the output of the scan
+
                 return result.stdout
 
         except Exception as e:
@@ -171,14 +171,14 @@ class Scanner:
         try:
             command = ["nmap", "-O"  , target_ip]
 
-            # Run the command and capture the output
+
             result = subprocess.run(command, capture_output=True, text=True)
 
-            # Check for errors
+
             if result.returncode != 0:
                 print(f"Error running scan: {result.stderr}")
             else:
-                # Print the output of the scan
+
                 return result.stdout
 
         except Exception as e:

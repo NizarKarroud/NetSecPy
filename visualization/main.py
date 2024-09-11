@@ -79,7 +79,6 @@ class EtherAnalyzer:
         self.ether_data = data[[field for field in list(data.columns) if field.startswith('Ether')]+["Timestamp"]].dropna()
 
     def visualize_ether_communication_graph(self):
-        # Create network graph
         network = nx.from_pandas_edgelist(
             self.ether_data, 
             source='Ether_src', 
@@ -87,10 +86,8 @@ class EtherAnalyzer:
             edge_attr='Ether_type'
         )
 
-        # Define positions for nodes
         pos = nx.spring_layout(network, seed=42)
         
-        # Create edge trace for the network graph
         edge_x = []
         edge_y = []
         edge_text = []
@@ -101,30 +98,26 @@ class EtherAnalyzer:
             edge_x.append(x1)
             edge_y.append(y0)
             edge_y.append(y1)
-            # Get the protocol for the edge
             edge_text.append(network[edge[0]][edge[1]]['Ether_type'])
 
-        # Edge trace
         edge_trace = go.Scatter(
             x=edge_x, 
             y=edge_y,
-            mode='lines',  # Draw lines for edges
+            mode='lines',   
             line=dict(width=0.5, color='#888'),
             hoverinfo='none'
         )
 
-        # Edge text trace
         edge_text_trace = go.Scatter(
-            x=[(x0 + x1) / 2 for x0, x1 in zip(edge_x[::2], edge_x[1::2])],  # Midpoints of edges
-            y=[(y0 + y1) / 2 for y0, y1 in zip(edge_y[::2], edge_y[1::2])],  # Midpoints of edges
-            mode='text',  # Display text
-            text=edge_text,  # Edge labels
+            x=[(x0 + x1) / 2 for x0, x1 in zip(edge_x[::2], edge_x[1::2])],   
+            y=[(y0 + y1) / 2 for y0, y1 in zip(edge_y[::2], edge_y[1::2])], 
+            mode='text',  
+            text=edge_text,   
             textposition='middle center', 
-            textfont=dict(size=10, color='red'),  # Text styling
+            textfont=dict(size=10, color='red'),  
             hoverinfo='none'
         )
 
-        # Create node trace
         node_x = []
         node_y = []
         for node in network.nodes():
@@ -142,7 +135,6 @@ class EtherAnalyzer:
             hoverinfo='text'
         )
 
-        # Create figure and plot
         fig = go.Figure(data=[edge_trace, edge_text_trace, node_trace],
                         layout=go.Layout(
                             title='Ethernet Communication Graph',
@@ -186,35 +178,28 @@ class EtherAnalyzer:
         return (df_ether_src,df_ether_dst)
 
     def mac_pair_analysis(self):
-        # Group by source and destination MAC addresses, and count occurrences
         pair_counts = self.ether_data.groupby(['Ether_src', 'Ether_dst']).size().reset_index(name='count')
         
-        # Create a new column that combines source and destination MAC addresses
         pair_counts['MAC_pair'] = pair_counts['Ether_src'] + ' -> ' + pair_counts['Ether_dst']
         
-        # Sort and select the top N pairs
         top_pairs = pair_counts.sort_values(by='count', ascending=False).head(10)
         
-        # Plot all pairs, but limit the display to the top N
         plt.figure(figsize=(14, 10))
         bars = plt.bar(top_pairs['MAC_pair'], top_pairs['count'], color='seagreen', alpha=0.7)
         plt.title(f'Top {10} Source-Destination MAC Address Pairs')
         plt.xlabel('Source and Destination MAC Address Pair')
         plt.ylabel('Count')
 
-        # Improve x-tick labels
-        plt.xticks(rotation=45, ha='right')  # Rotate and align x-tick labels
-        plt.tight_layout()  # Ensure everything fits without overlap
+        plt.xticks(rotation=45, ha='right')   
+        plt.tight_layout()   
         
         plt.show()
 
-        # Return the entire dataset for further analysis if needed
         return pair_counts
     
     def analyze_traffic_types(self):
         ether_type_counts = self.ether_data['Ether_type'].value_counts()
 
-        # Horizontal bar chart
         plt.figure(figsize=(10, 6))
         ether_type_counts.plot(kind='barh', color='lightblue', alpha=0.7)
         plt.title('Ether_type Breakdown')
@@ -230,30 +215,22 @@ class EtherAnalyzer:
 
     def detect_arp_scanning(self):
         try:
-            # Filter for ARP packets with opcode 1 (ARP Request)
             arp_requests = self.arp_data[self.arp_data['ARP_op'] == 1]
 
-            # Drop rows with invalid timestamps
             arp_requests = arp_requests.dropna(subset=['Timestamp'])
 
-            # Ensure 'Timestamp' column is in datetime format
             arp_requests['Timestamp'] = pd.to_datetime(arp_requests['Timestamp'])
 
-            # Set 'Timestamp' column as the index
             arp_requests.set_index('Timestamp', inplace=True)
 
-            # Count ARP requests per source MAC address
             arp_request_counts = arp_requests.groupby('Ether_src').size()
 
-            # Calculate threshold for identifying high counts
             mean = arp_request_counts.mean()
             std_dev = arp_request_counts.std()
             threshold = mean + 3 * std_dev
             
-            # Flag MAC addresses with high ARP request counts
             high_count_mac_addresses = arp_request_counts[arp_request_counts > threshold]
             
-            # Plot ARP request counts per MAC address
             plt.figure(figsize=(12, 8))
             arp_request_counts.plot(kind='bar', color='lightcoral', alpha=0.7)
             plt.axhline(y=threshold, color='r', linestyle='--', label=f'Threshold ({threshold:.0f})')
@@ -265,7 +242,6 @@ class EtherAnalyzer:
             plt.tight_layout()
             plt.show()
 
-            # Plot high count MAC addresses
             if not high_count_mac_addresses.empty:
                 plt.figure(figsize=(12, 8))
                 high_count_mac_addresses.plot(kind='bar', color='lightblue', alpha=0.7)
@@ -276,10 +252,8 @@ class EtherAnalyzer:
                 plt.tight_layout()
                 plt.show()
 
-            # Count ARP requests over time
             arp_requests_per_hour = arp_requests.resample('H').size()
 
-            # Plot ARP request counts over time
             plt.figure(figsize=(14, 7))
             plt.plot(arp_requests_per_hour.index, arp_requests_per_hour.values, marker='o', linestyle='-', color='b')
             plt.title('ARP Request Counts Over Time')
@@ -287,7 +261,6 @@ class EtherAnalyzer:
             plt.ylabel('ARP Request Count')
             plt.grid(True, linestyle='--', alpha=0.7)
 
-            # Improve x-axis formatting
             ax = plt.gca()
             ax.xaxis.set_major_locator(mdates.HourLocator(interval=1))
             ax.xaxis.set_minor_locator(mdates.MinuteLocator(interval=15))
@@ -305,20 +278,15 @@ class EtherAnalyzer:
     def broadcast_traffic_analysis(self):
         broadcast_dst = 'ff:ff:ff:ff:ff:ff'
         
-        # Filter rows with broadcast destination address
         broadcast_packets = self.ether_data[self.ether_data['Ether_dst'] == broadcast_dst]
 
 
-        # Drop rows with invalid timestamps
         broadcast_packets = broadcast_packets.dropna(subset=['Timestamp'])
 
-        # Set 'Timestamp' column as the index
         broadcast_packets.set_index('Timestamp', inplace=True)
 
-        # Count the number of broadcast packets per hour
         broadcast_counts_per_hour = broadcast_packets.resample('H').size()
 
-        # Plot broadcast traffic over time with a line plot
         plt.figure(figsize=(14, 7))
         plt.plot(broadcast_counts_per_hour.index, broadcast_counts_per_hour.values, marker='o', linestyle='-', color='b')
         plt.title('Broadcast Traffic Count per Hour')
@@ -326,7 +294,6 @@ class EtherAnalyzer:
         plt.ylabel('Broadcast Packet Count')
         plt.grid(True, linestyle='--', alpha=0.7)
 
-        # Improve x-axis formatting
         ax = plt.gca()
         ax.xaxis.set_major_locator(mdates.HourLocator(interval=1))
         ax.xaxis.set_minor_locator(mdates.MinuteLocator(interval=15))
@@ -336,8 +303,6 @@ class EtherAnalyzer:
         plt.tight_layout()
 
         plt.show()
-
-        # Return the broadcast packets and their count
 
         return broadcast_packets
 
@@ -349,21 +314,14 @@ class IpAnalyzer:
 
         traffic_volume = self.ip_data.groupby('IP_src')['IP_len'].sum()
 
-        # Check if traffic_volume is empty
-        if traffic_volume.empty:
-            print("No traffic data available for plotting.")
-            return
 
-        # Step 2: Statistical analysis to detect unusually high traffic volume
         mean_traffic = traffic_volume.mean()
         std_dev_traffic = traffic_volume.std()
 
         threshold = mean_traffic + 3 * std_dev_traffic
 
-        # Step 3: Identify IP addresses with traffic volumes higher than the threshold
         high_traffic_ips = traffic_volume[traffic_volume > threshold]
 
-        # Step 4: Plot the traffic volume for all IPs
         plt.figure(figsize=(12, 8))
         traffic_volume.plot(kind='bar', color='lightblue', alpha=0.7)
         plt.axhline(y=threshold, color='r', linestyle='--', label=f'Threshold ({threshold:.0f})')
@@ -375,7 +333,6 @@ class IpAnalyzer:
         plt.tight_layout()
         plt.show()
 
-        # Step 5: Plot the IPs with unusually high traffic volume
         if not high_traffic_ips.empty:
             plt.figure(figsize=(12, 8))
             high_traffic_ips.plot(kind='bar', color='salmon', alpha=0.7)
@@ -385,16 +342,12 @@ class IpAnalyzer:
             plt.xticks(rotation=45, ha='right')
             plt.tight_layout()
             plt.show()
-        else:
-            print("No IPs detected with unusually high traffic volume.")
 
-        # Return IPs with high traffic
         return traffic_volume.to_frame(name='Total_IP_len')
 
     def analyze_ttl(self):
         ttl_data = self.ip_data[['IP_ttl']].dropna()
         
-        # Plot TTL distribution
         plt.figure(figsize=(12, 6))
         ttl_data['IP_ttl'].plot(kind='hist', bins=50, color='skyblue', edgecolor='black')
         plt.title('Distribution of TTL Values')
@@ -403,16 +356,10 @@ class IpAnalyzer:
         plt.grid(True)
         plt.show()
         
-        # Basic statistics
-        mean_ttl = ttl_data['IP_ttl'].mean()
-        std_dev_ttl = ttl_data['IP_ttl'].std()
-        print(f"Mean TTL: {mean_ttl:.2f}")
-        print(f"Standard Deviation of TTL: {std_dev_ttl:.2f}")
 
         return ttl_data
     
     def visualize_ip_communication_graph(self): 
-        # Create network graph
         network = nx.from_pandas_edgelist(
             self.ip_data, 
             source='IP_src', 
@@ -420,10 +367,8 @@ class IpAnalyzer:
             edge_attr='IP_proto'
         )
 
-        # Define positions for nodes
         pos = nx.spring_layout(network, seed=42)
         
-        # Create edge trace for the network graph
         edge_x = []
         edge_y = []
         edge_text = []
@@ -434,30 +379,26 @@ class IpAnalyzer:
             edge_x.append(x1)
             edge_y.append(y0)
             edge_y.append(y1)
-            # Get the protocol for the edge
             edge_text.append(network[edge[0]][edge[1]]['IP_proto'])
 
-        # Edge trace
         edge_trace = go.Scatter(
             x=edge_x, 
             y=edge_y,
-            mode='lines',  # Draw lines for edges
+            mode='lines',   
             line=dict(width=0.5, color='#888'),
             hoverinfo='none'
         )
 
-        # Edge text trace
         edge_text_trace = go.Scatter(
-            x=[(x0 + x1) / 2 for x0, x1 in zip(edge_x[::2], edge_x[1::2])],  # Midpoints of edges
-            y=[(y0 + y1) / 2 for y0, y1 in zip(edge_y[::2], edge_y[1::2])],  # Midpoints of edges
-            mode='text',  # Display text
-            text=edge_text,  # Edge labels
+            x=[(x0 + x1) / 2 for x0, x1 in zip(edge_x[::2], edge_x[1::2])],   
+            y=[(y0 + y1) / 2 for y0, y1 in zip(edge_y[::2], edge_y[1::2])],  
+            mode='text',   
+            text=edge_text,  
             textposition='middle center', 
-            textfont=dict(size=10, color='red'),  # Text styling
+            textfont=dict(size=10, color='red'),   
             hoverinfo='none'
         )
 
-        # Create node trace
         node_x = []
         node_y = []
         for node in network.nodes():
@@ -475,7 +416,6 @@ class IpAnalyzer:
             hoverinfo='text'
         )
 
-        # Create figure and plot
         fig = go.Figure(data=[edge_trace, edge_text_trace, node_trace],
                         layout=go.Layout(
                             title='IP Communication Graph',
@@ -518,28 +458,163 @@ class IpAnalyzer:
         return ip_src_df, ip_dst_df
 
     def ip_pair_analysis(self, top_n=10):
-        # Group by source and destination IP addresses, and count occurrences
         pair_counts = self.ip_data.groupby(['IP_src', 'IP_dst']).size().reset_index(name='count')
         
-        # Create a new column that combines source and destination IP addresses
         pair_counts['IP_pair'] = pair_counts['IP_src'] + ' -> ' + pair_counts['IP_dst']
         
-        # Sort and select the top N pairs
         top_pairs = pair_counts.sort_values(by='count', ascending=False).head(top_n)
         
-        # Plot all pairs, but limit the display to the top N
         plt.figure(figsize=(14, 10))
         bars = plt.bar(top_pairs['IP_pair'], top_pairs['count'], color='seagreen', alpha=0.7)
         plt.title(f'Top {top_n} Source-Destination IP Address Pairs')
         plt.xlabel('Source and Destination IP Address Pair')
         plt.ylabel('Count')
 
-        # Improve x-tick labels
         plt.xticks(rotation=45, ha='right' , fontsize=9) 
         plt.tight_layout()  
         
         plt.show()
 
-        # Return the entire dataset for further analysis if needed
         return pair_counts
 
+class TransportAnalyzer:
+    def __init__(self , data) -> None:
+        self.tcp_data = data[['IP_src', 'IP_dst','TCP_sport', 'TCP_dport', 'TCP_flags','Timestamp']].dropna()
+        self.udp_data = data[['IP_src', 'IP_dst','UDP_sport', 'UDP_dport', 'UDP_len' , 'Timestamp']].dropna()
+    
+    def detect_udp_port_scanning(self, std_multiplier=2):
+        source_port_scan = self.udp_data.groupby(['IP_src', 'UDP_sport'])['UDP_dport'].nunique()
+
+        # Calculate mean and standard deviation
+        mean_ports = source_port_scan.mean()
+        std_ports = source_port_scan.std()
+        threshold = mean_ports + std_multiplier * std_ports
+
+        # Identify source IP and source port combinations exceeding the threshold
+        potential_scans = source_port_scan[source_port_scan > threshold]
+
+        # Plot the results
+        plt.figure(figsize=(12, 8))
+        potential_scans.plot(kind='bar', color='orange', edgecolor='black')
+        plt.axhline(threshold, color='red', linestyle='--', label=f'Threshold: {threshold:.2f} (Mean + {std_multiplier} * Std)')
+        plt.title('Potential UDP Port Scanning Detection')
+        plt.xlabel('Source IP and Source Port')
+        plt.ylabel('Number of Unique Destination Ports')
+        plt.legend()
+        plt.xticks(rotation=90)  # Rotate x labels for better readability
+        plt.tight_layout()
+        plt.show()
+
+    def analyze_udp_lengths(self, std_multiplier=2):
+        """
+        Analyze UDP packet lengths and detect outliers based on length.
+        Threshold is dynamically calculated as mean + std_multiplier * standard deviation.
+        """
+
+        mean_len = self.udp_data['UDP_len'].mean()
+        std_len = self.udp_data['UDP_len'].std()
+        threshold = mean_len + std_multiplier * std_len
+
+        plt.figure(figsize=(10, 6))
+        self.udp_data['UDP_len'].plot(kind='hist', bins=30, color='blue', edgecolor='black' , density=True)
+        plt.axvline(threshold, color='red', linestyle='--', label=f'Threshold: {threshold:.2f} (Mean + {std_multiplier} * Std)')
+        plt.title('Distribution of UDP Packet Lengths')
+        plt.xlabel('UDP Length')
+        plt.ylabel('Frequency')
+        plt.legend()
+        plt.show()
+
+        return self.udp_data[self.udp_data['UDP_len'] > threshold]
+        
+    def udp_port_distribution(self):
+        # Plot for Source Port Distribution
+        plt.figure(figsize=(12, 6))
+        self.udp_data['UDP_sport'].value_counts().plot(kind='bar', color='red', edgecolor='black')
+        plt.title('Source Port Distribution')
+        plt.xlabel('Source Port')
+        plt.ylabel('Count')        
+        plt.tight_layout()
+        plt.show()
+
+        # Plot for Destination Port Distribution
+        plt.figure(figsize=(12, 6))
+        self.udp_data['UDP_dport'].value_counts().plot(kind='bar', color='red', edgecolor='black')
+        plt.title('Destination Port Distribution')
+        plt.xlabel('Destination Port')
+        plt.ylabel('Count')
+
+
+        plt.tight_layout()
+        plt.show()
+
+    def tcp_flags_distribution(self):
+        flag_counts = self.tcp_data['TCP_flags'].value_counts()
+
+        plt.figure(figsize=(12, 6))
+        flag_counts.plot(kind='bar', color='purple', edgecolor='black')
+        plt.title('TCP Flag Distribution')
+        plt.xlabel('TCP Flags')
+        plt.ylabel('Count')
+        plt.show()
+
+    def tcp_port_distribution(self):
+        # Plot for Source Port Distribution
+        plt.figure(figsize=(12, 6))
+        self.tcp_data['TCP_sport'].value_counts().plot(kind='bar', color='red', edgecolor='black')
+        plt.title('Source Port Distribution')
+        plt.xlabel('Source Port')
+        plt.ylabel('Count')        
+        plt.tight_layout()
+        plt.show()
+
+        # Plot for Destination Port Distribution
+        plt.figure(figsize=(12, 6))
+        self.tcp_data['TCP_dport'].value_counts().plot(kind='bar', color='red', edgecolor='black')
+        plt.title('Destination Port Distribution')
+        plt.xlabel('Destination Port')
+        plt.ylabel('Count')
+
+
+        plt.tight_layout()
+        plt.show()
+
+    def detect_unusual_port_activity(self, num_std_dev=3):
+
+        port_activity = self.tcp_data.groupby('TCP_dport').size()
+
+        mean_activity = port_activity.mean()
+        std_dev_activity = port_activity.std()
+        threshold = mean_activity + (num_std_dev * std_dev_activity)
+        
+
+        # Find ports with activity above the threshold
+        unusual_ports = port_activity[port_activity > threshold]
+
+        # Plot the unusual port activity
+        plt.figure(figsize=(10, 6))
+        unusual_ports.plot(kind='bar', color='orange', edgecolor='black')
+        plt.axhline(threshold, color='red', linestyle='--', label=f'Threshold: {threshold:.2f}')
+        plt.title('Unusual Port Activity')
+        plt.xlabel('Destination Port')
+        plt.ylabel('Number of Packets')
+        plt.legend()
+        plt.show()
+
+        if not unusual_ports.empty:
+            return unusual_ports
+
+    def analyze_ip_to_port_communication(self):
+
+        ip_port_communication = self.tcp_data.groupby(['IP_src', 'TCP_dport']).size().unstack(fill_value=0)
+
+        # Plot a heatmap of communication
+        plt.figure(figsize=(12, 8))
+        plt.imshow(ip_port_communication, cmap='viridis', aspect='auto')
+        plt.colorbar(label='Number of Packets')
+        plt.title('IP-to-Port Communication Heatmap')
+        plt.xlabel('Destination Port')
+        plt.ylabel('Source IP')
+        plt.xticks(ticks=range(len(ip_port_communication.columns)), labels=ip_port_communication.columns, rotation=90)
+        plt.yticks(ticks=range(len(ip_port_communication.index)), labels=ip_port_communication.index)
+        plt.tight_layout()
+        plt.show()
