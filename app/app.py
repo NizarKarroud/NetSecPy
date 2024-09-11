@@ -187,6 +187,9 @@ class SnifferApp(QMainWindow):
 
         self.selected_interface = None
 
+        self.packet_buffer = []  # List to hold packets for batch processing
+        self.batch_size = 20    # Number of packets to accumulate before updating the table (lower value if the network is small)
+
 
         self.paused = False
 
@@ -502,7 +505,6 @@ class SnifferApp(QMainWindow):
         self.packet_crafter_window = PacketCrafterApp()
         self.packet_crafter_window.show()
 
-
     def add_sniffer_tab(self):
 
         sniffer_tab = QWidget()
@@ -660,47 +662,21 @@ class SnifferApp(QMainWindow):
         self.sniffer_thread.packet_received.connect(self.pyshark_packet_handler)
         self.sniffer_thread.start()
 
-    def pyshark_packet_handler(self , packet , filtered_from_pcap=False):
-        if filtered_from_pcap == False :
+    def pyshark_packet_handler(self, packet, filtered_from_pcap=False):
+        if not filtered_from_pcap:
             self.packets.append(packet)
 
-        if 'IP' in packet:
-            timestamp = str(packet.sniff_time)
-            src_ip = packet.ip.src
-            dest_ip = packet.ip.dst
-            proto = IP_PROTOS.d.get(int(packet.ip.proto) , f"{packet.ip.proto}")
-            length = len(packet)
-            
-            try:
-
-                if hasattr(packet, proto):
-                    layer = getattr(packet, proto)
-                    
-
-                    src_port = str(getattr(layer, 'srcport', None)) if hasattr(layer, 'srcport') else None
-                    dst_port = str(getattr(layer, 'dstport', None)) if hasattr(layer, 'dstport') else None
-
-                else:
-                    src_port = None
-                    dst_port = None
-
-            except Exception as e:
-                src_port = None
-                dst_port = None
-
-
+        # Accumulate packets in the buffer
+        self.packet_buffer.append(packet)
+        print(len(self.packet_buffer))
+        if len(self.packet_buffer) >= self.batch_size:
+            # If buffer is full, process and update the table
             QMetaObject.invokeMethod(
                 self, "update_table",
                 Qt.QueuedConnection,
-                Q_ARG(str, timestamp),
-                Q_ARG(str, src_ip),
-                Q_ARG(str, dest_ip),
-                Q_ARG(str, str(proto)),
-                Q_ARG(str, str(length)),
-                Q_ARG(str, src_port),
-                Q_ARG(str, dst_port),
-                Q_ARG(object, packet)  # Pass the entire packet object
+                Q_ARG(list, self.packet_buffer)
             )
+            self.packet_buffer = [] 
 
     def apply_filters(self):
             self.sniffer_thread.stop()
@@ -712,40 +688,58 @@ class SnifferApp(QMainWindow):
                 for filtered_packet in self.filtered_packets :
                     self.pyshark_packet_handler(filtered_packet , filtered_from_pcap=True)
             self.start_sniffing()
-
-    @pyqtSlot(str,str, str, str, str , str , str , object)
-    def update_table(self,timestamp, src_ip, dest_ip, proto, length , src_port , dst_port , packet):
+    
+    @pyqtSlot(list)
+    def update_table(self, packet_list):
         if not self.paused:
-            row_position = self.sniffer_table.rowCount()
-            self.sniffer_table.insertRow(row_position)
-            self.sniffer_table.setItem(row_position, 0, QTableWidgetItem(timestamp))
-            self.sniffer_table.setItem(row_position, 1, QTableWidgetItem(src_ip))
-            self.sniffer_table.setItem(row_position, 2, QTableWidgetItem(dest_ip))
-            self.sniffer_table.setItem(row_position, 3, QTableWidgetItem(proto))
-            self.sniffer_table.setItem(row_position, 4, QTableWidgetItem(length))
-            self.sniffer_table.setItem(row_position, 5, QTableWidgetItem(src_port))
-            self.sniffer_table.setItem(row_position, 6, QTableWidgetItem(dst_port))
+            for packet in packet_list:
+                if 'IP' in packet:
+                    timestamp = str(packet.sniff_time)
+                    src_ip = packet.ip.src
+                    dest_ip = packet.ip.dst
+                    proto = IP_PROTOS.d.get(int(packet.ip.proto), f"{packet.ip.proto}")
+                    length = str(len(packet))
 
-            more_info_button = QPushButton("More Info")
-            more_info_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #202C31;
-                    color: #FFFFFF;
-                    font-size: 14px;
-                    padding: 5px;
-                    border-radius: 5px;
-                }
-                QPushButton:hover {
-                    background-color: #151D20;
-                }
-                QPushButton:pressed {
-                    background-color: #0F1416;
-                }
-            """)
-            more_info_button.clicked.connect(lambda : self.show_packet(packet))
+                    try:
+                        if hasattr(packet, proto):
+                            layer = getattr(packet, proto)
+                            src_port = str(getattr(layer, 'srcport', None)) if hasattr(layer, 'srcport') else None
+                            dst_port = str(getattr(layer, 'dstport', None)) if hasattr(layer, 'dstport') else None
+                        else:
+                            src_port = None
+                            dst_port = None
+                    except Exception:
+                        src_port = None
+                        dst_port = None
 
+                    row_position = self.sniffer_table.rowCount()
+                    self.sniffer_table.insertRow(row_position)
+                    self.sniffer_table.setItem(row_position, 0, QTableWidgetItem(timestamp))
+                    self.sniffer_table.setItem(row_position, 1, QTableWidgetItem(src_ip))
+                    self.sniffer_table.setItem(row_position, 2, QTableWidgetItem(dest_ip))
+                    self.sniffer_table.setItem(row_position, 3, QTableWidgetItem(proto))
+                    self.sniffer_table.setItem(row_position, 4, QTableWidgetItem(length))
+                    self.sniffer_table.setItem(row_position, 5, QTableWidgetItem(src_port))
+                    self.sniffer_table.setItem(row_position, 6, QTableWidgetItem(dst_port))
 
-            self.sniffer_table.setCellWidget(row_position, 7, more_info_button)
+                    more_info_button = QPushButton("More Info")
+                    more_info_button.setStyleSheet("""
+                        QPushButton {
+                            background-color: #202C31;
+                            color: #FFFFFF;
+                            font-size: 14px;
+                            padding: 5px;
+                            border-radius: 5px;
+                        }
+                        QPushButton:hover {
+                            background-color: #151D20;
+                        }
+                        QPushButton:pressed {
+                            background-color: #0F1416;
+                        }
+                    """)
+                    more_info_button.clicked.connect(lambda: self.show_packet(packet))
+                    self.sniffer_table.setCellWidget(row_position, 7, more_info_button)
 
     def show_packet(self,packet):
         details_window = PacketDetailsWindow(packet,self)
