@@ -6,6 +6,7 @@ import sys , os
 from datetime import datetime
 import matplotlib.dates as mdates  
 import plotly.graph_objects as go
+import numpy as np
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -557,24 +558,32 @@ class TransportAnalyzer:
         plt.ylabel('Count')
         plt.show()
 
-    def tcp_port_distribution(self):
+    def tcp_port_distribution(self, min_count=100):
+        # Filter source ports with at least 'min_count' packets
+        source_ports = self.tcp_data['TCP_sport'].value_counts()
+        source_ports = source_ports[source_ports >= min_count]
+
         # Plot for Source Port Distribution
         plt.figure(figsize=(12, 6))
-        self.tcp_data['TCP_sport'].value_counts().plot(kind='bar', color='red', edgecolor='black')
+        source_ports.plot(kind='bar', color='blue', edgecolor='black')
         plt.title('Source Port Distribution')
         plt.xlabel('Source Port')
-        plt.ylabel('Count')        
+        plt.ylabel('Count')
+        plt.xticks(rotation=90)  # Rotate x-axis labels for better readability
         plt.tight_layout()
         plt.show()
 
+        # Filter destination ports with at least 'min_count' packets
+        destination_ports = self.tcp_data['TCP_dport'].value_counts()
+        destination_ports = destination_ports[destination_ports >= min_count]
+
         # Plot for Destination Port Distribution
         plt.figure(figsize=(12, 6))
-        self.tcp_data['TCP_dport'].value_counts().plot(kind='bar', color='red', edgecolor='black')
+        destination_ports.plot(kind='bar', color='red', edgecolor='black')
         plt.title('Destination Port Distribution')
         plt.xlabel('Destination Port')
         plt.ylabel('Count')
-
-
+        plt.xticks(rotation=90)  # Rotate x-axis labels for better readability
         plt.tight_layout()
         plt.show()
 
@@ -587,7 +596,7 @@ class TransportAnalyzer:
         threshold = mean_activity + (num_std_dev * std_dev_activity)
         
 
-        # Find ports with activity above the threshold
+        # Find por  ts with activity above the threshold
         unusual_ports = port_activity[port_activity > threshold]
 
         # Plot the unusual port activity
@@ -603,18 +612,32 @@ class TransportAnalyzer:
         if not unusual_ports.empty:
             return unusual_ports
 
-    def analyze_ip_to_port_communication(self):
+    def analyze_ip_most_used_ports(self):
+        """
+        Analyze the most frequently used destination port for each IP address.
+        """
+        # Group by IP and destination port, and count the number of occurrences
+        ip_port_counts = self.tcp_data.groupby(['IP_src', 'TCP_dport']).size().reset_index(name='count')
 
-        ip_port_communication = self.tcp_data.groupby(['IP_src', 'TCP_dport']).size().unstack(fill_value=0)
+        # Find the most frequently used port for each IP
+        most_used_ports = ip_port_counts.loc[ip_port_counts.groupby('IP_src')['count'].idxmax()]
 
-        # Plot a heatmap of communication
+        # Plot the most used ports
         plt.figure(figsize=(12, 8))
-        plt.imshow(ip_port_communication, cmap='viridis', aspect='auto')
-        plt.colorbar(label='Number of Packets')
-        plt.title('IP-to-Port Communication Heatmap')
-        plt.xlabel('Destination Port')
-        plt.ylabel('Source IP')
-        plt.xticks(ticks=range(len(ip_port_communication.columns)), labels=ip_port_communication.columns, rotation=90)
-        plt.yticks(ticks=range(len(ip_port_communication.index)), labels=ip_port_communication.index)
+        bars = plt.bar(most_used_ports['IP_src'].astype(str), most_used_ports['TCP_dport'], color='skyblue', edgecolor='black')
+
+        # Add labels and title
+        plt.xlabel('Source IP')
+        plt.ylabel('Most Used Destination Port')
+        plt.title('Most Frequently Used Destination Port per IP Address')
+        
+        # Rotate x-ticks for better readability
+        plt.xticks(rotation=90)
+        
+        # Add value labels on top of bars
+        for bar in bars:
+            yval = bar.get_height()
+            plt.text(bar.get_x() + bar.get_width()/2, yval, int(yval), va='bottom')  # va: vertical alignment
+
         plt.tight_layout()
         plt.show()

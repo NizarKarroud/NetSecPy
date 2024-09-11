@@ -1119,7 +1119,7 @@ class AnalysisTab(QWidget):
             ])
             self.add_analysis_section("Transport Layer", [
                 "Detect UDP port Scanning", "Analyze UDP len", "UDP Port Distribution", 
-                "TCP Flags Distribution", "TCP Port Distribution" , "Unusual TCP Port Activity" , "IP / Port Heatmap"
+                "TCP Flags Distribution", "TCP Port Distribution" , "Unusual TCP Port Activity" , "IP / Port distribution"
             ])
             
             self.analysis_layout.addWidget(self.toolbox)
@@ -1169,7 +1169,7 @@ class AnalysisTab(QWidget):
             "TCP Flags Distribution" : self.transport_analyser.tcp_flags_distribution, 
             "TCP Port Distribution" : self.transport_analyser.tcp_port_distribution , 
             "Unusual TCP Port Activity"  : self.transport_analyser.detect_unusual_port_activity , 
-            "IP / Port Heatmap" : self.transport_analyser.analyze_ip_to_port_communication
+            "IP / Port distribution" : self.transport_analyser.analyze_ip_most_used_ports
         }
     
         QMessageBox.information(self, "Update", "Packets updated successfully.")
@@ -1229,7 +1229,7 @@ class AnalysisTab(QWidget):
             "TCP Flags Distribution" : self.transport_analyser.tcp_flags_distribution, 
             "TCP Port Distribution" : self.transport_analyser.tcp_port_distribution , 
             "Unusual TCP Port Activity"  : self.transport_analyser.detect_unusual_port_activity , 
-            "IP / Port Heatmap" : self.transport_analyser.analyze_ip_to_port_communication
+            "IP / Port distribution" : self.transport_analyser.analyze_ip_most_used_ports
 
         }
     
