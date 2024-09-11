@@ -177,9 +177,15 @@ class EtherAnalyzer:
         plt.tight_layout()
         plt.show()
 
-        return (ether_src_counts,ether_dst_counts)
+        df_ether_src = ether_src_counts.reset_index()
+        df_ether_src.columns = ['Ether_src', 'Count']
 
-    def mac_pair_analysis(self, top_n=10):
+        df_ether_dst = ether_dst_counts.reset_index()
+        df_ether_dst.columns = ['Ether_dst', 'Count']
+
+        return (df_ether_src,df_ether_dst)
+
+    def mac_pair_analysis(self):
         # Group by source and destination MAC addresses, and count occurrences
         pair_counts = self.ether_data.groupby(['Ether_src', 'Ether_dst']).size().reset_index(name='count')
         
@@ -187,12 +193,12 @@ class EtherAnalyzer:
         pair_counts['MAC_pair'] = pair_counts['Ether_src'] + ' -> ' + pair_counts['Ether_dst']
         
         # Sort and select the top N pairs
-        top_pairs = pair_counts.sort_values(by='count', ascending=False).head(top_n)
+        top_pairs = pair_counts.sort_values(by='count', ascending=False).head(10)
         
         # Plot all pairs, but limit the display to the top N
         plt.figure(figsize=(14, 10))
         bars = plt.bar(top_pairs['MAC_pair'], top_pairs['count'], color='seagreen', alpha=0.7)
-        plt.title(f'Top {top_n} Source-Destination MAC Address Pairs')
+        plt.title(f'Top {10} Source-Destination MAC Address Pairs')
         plt.xlabel('Source and Destination MAC Address Pair')
         plt.ylabel('Count')
 
@@ -217,7 +223,10 @@ class EtherAnalyzer:
         plt.tight_layout()
         plt.show()
 
-        return ether_type_counts
+        ether_type_counts_df = ether_type_counts.reset_index()
+        ether_type_counts_df.columns = ['Ether_type', 'Count']
+
+        return ether_type_counts_df
 
     def detect_arp_scanning(self):
         try:
@@ -288,11 +297,10 @@ class EtherAnalyzer:
             plt.tight_layout()
             plt.show()
 
-            return arp_request_counts, high_count_mac_addresses
+            return arp_request_counts
 
         except Exception as e:
-            print(f"Error in detect_arp_scanning: {e}")
-            return None, None
+            return None
         
     def broadcast_traffic_analysis(self):
         broadcast_dst = 'ff:ff:ff:ff:ff:ff'
@@ -330,8 +338,8 @@ class EtherAnalyzer:
         plt.show()
 
         # Return the broadcast packets and their count
-        broadcast_count = len(broadcast_packets)
-        return broadcast_packets, broadcast_count
+
+        return broadcast_packets
 
 class IpAnalyzer:
     def __init__(self, data) -> None:
@@ -381,7 +389,7 @@ class IpAnalyzer:
             print("No IPs detected with unusually high traffic volume.")
 
         # Return IPs with high traffic
-        return high_traffic_ips
+        return traffic_volume.to_frame(name='Total_IP_len')
 
     def analyze_ttl(self):
         ttl_data = self.ip_data[['IP_ttl']].dropna()
@@ -401,7 +409,9 @@ class IpAnalyzer:
         print(f"Mean TTL: {mean_ttl:.2f}")
         print(f"Standard Deviation of TTL: {std_dev_ttl:.2f}")
 
-    def visualize_ip_communication_graph(self):
+        return ttl_data
+    
+    def visualize_ip_communication_graph(self): 
         # Create network graph
         network = nx.from_pandas_edgelist(
             self.ip_data, 
@@ -499,7 +509,13 @@ class IpAnalyzer:
         plt.tight_layout()
         plt.show()
 
-        return ip_src_counts, ip_dst_counts
+        ip_src_df = ip_src_counts.reset_index()
+        ip_src_df.columns = ['IP_src', 'Count']  
+
+        ip_dst_df = ip_dst_counts.reset_index()
+        ip_dst_df.columns = ['IP_dst', 'Count']  
+
+        return ip_src_df, ip_dst_df
 
     def ip_pair_analysis(self, top_n=10):
         # Group by source and destination IP addresses, and count occurrences
@@ -526,27 +542,4 @@ class IpAnalyzer:
 
         # Return the entire dataset for further analysis if needed
         return pair_counts
-
-
-    def traffic_volume_over_time(self, interval='1T'):
-        # Ensure the Timestamp column is in datetime format
-        self.ip_data['Timestamp'] = pd.to_datetime(self.ip_data['Timestamp'])
-        
-        # Set Timestamp as the index for resampling
-        self.ip_data.set_index('Timestamp', inplace=True)
-        
-        # Resample the data to the specified interval and count the number of packets
-        traffic_volume = self.ip_data.resample(interval).size()
-        # Plot the traffic volume over time
-        plt.figure(figsize=(12, 6))
-        traffic_volume.plot(kind='line', color='seagreen', alpha=0.7)
-        plt.title(f'Traffic Volume Over Time ({interval})')
-        plt.xlabel('Time')
-        plt.ylabel('Packet Count')
-        plt.grid(True)
-        plt.tight_layout()
-        plt.show()
-        
-        # Reset index if you need to restore the original DataFrame structure
-        self.ip_data.reset_index(inplace=True)
 

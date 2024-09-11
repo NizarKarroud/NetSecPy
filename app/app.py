@@ -1070,7 +1070,12 @@ class AnalysisTab(QWidget):
             # Create and add the analysis options page
             self.analysis_page = QWidget()
             self.analysis_layout = QVBoxLayout(self.analysis_page)
-            
+            self.update_packets_button = QPushButton("Update Packets")
+            self.update_packets_button.setVisible(False)  
+            self.update_packets_button.clicked.connect(self.update_packets)
+
+            self.analysis_layout.addWidget(self.update_packets_button)
+
             # Create the toolbox
             self.toolbox = QToolBox()
             self.toolbox.setStyleSheet("""
@@ -1095,7 +1100,7 @@ class AnalysisTab(QWidget):
             ])
             self.add_analysis_section("IP Layer", [
                 "IP Communication Graph", "Analyze TTL", "IP Frequency Analysis", 
-                "IP Pair Analysis", "Traffic Volume Analysis", "High Traffic IPs"
+                "IP Pair Analysis", "High Traffic IPs"
             ])
             
             self.analysis_layout.addWidget(self.toolbox)
@@ -1112,6 +1117,36 @@ class AnalysisTab(QWidget):
             # Show the choice page initially
             self.stacked_widget.setCurrentWidget(self.choice_page)
 
+
+    def update_packets(self):
+        """
+        Reinitialize the NTA, EtherAnalyzer, and IpAnalyzer with the updated packet data for a "Live analysis".
+        """
+        if hasattr(self, 'nta'):
+            del self.nta
+        if hasattr(self, 'ether_analyser'):
+            del self.ether_analyser
+        if hasattr(self, 'ip_analyser'):
+            del self.ip_analyser
+        self.nta = NTA(packets=[self.parent.pyshark_to_scapy(packet) for packet in self.parent.packets])
+        self.ether_analyser = EtherAnalyzer(self.nta.data)
+        print(self.ether_analyser.ether_data)
+        self.ip_analyser = IpAnalyzer(self.nta.data)
+        self.analysis_methods = {
+            "Communication Graph": self.ether_analyser.visualize_ether_communication_graph,
+            "MAC Frequency Analysis": self.ether_analyser.mac_frequency_analysis,
+            "Mac Pairs Analysis": self.ether_analyser.mac_pair_analysis,
+            "Analyze Ethernet Types": self.ether_analyser.analyze_traffic_types,
+            "Detect ARP scanning": self.ether_analyser.detect_arp_scanning,
+            "Broadcast Traffic Analysis": self.ether_analyser.broadcast_traffic_analysis,
+            "IP Communication Graph": self.ip_analyser.visualize_ip_communication_graph,
+            "Analyze TTL": self.ip_analyser.analyze_ttl,
+            "IP Frequency Analysis": self.ip_analyser.ip_frequency_analysis,
+            "IP Pair Analysis": self.ip_analyser.ip_pair_analysis,
+            "High Traffic IPs": self.ip_analyser.monitor_high_traffic_ips
+        }
+    
+        QMessageBox.information(self, "Update", "Packets updated successfully.")
 
     def add_analysis_section(self, title, items):
         # Create a widget for the section
@@ -1145,12 +1180,14 @@ class AnalysisTab(QWidget):
         if self.file_radio.isChecked():
             self.open_file_dialog()
         else:
+            self.update_packets_button.setVisible(True)  # Show the button
             self.nta = NTA(packets=[self.parent.pyshark_to_scapy(packet) for packet in self.parent.packets])
             self.stacked_widget.setCurrentWidget(self.analysis_page)
-        
+
         self.ether_analyser = EtherAnalyzer(self.nta.data)
         self.ip_analyser = IpAnalyzer(self.nta.data)
-        
+        print(self.ether_analyser.ether_data)
+
         # Mapping of analysis options to methods
         self.analysis_methods = {
             "Communication Graph": self.ether_analyser.visualize_ether_communication_graph,
@@ -1163,7 +1200,6 @@ class AnalysisTab(QWidget):
             "Analyze TTL": self.ip_analyser.analyze_ttl,
             "IP Frequency Analysis": self.ip_analyser.ip_frequency_analysis,
             "IP Pair Analysis": self.ip_analyser.ip_pair_analysis,
-            "Traffic Volume Analysis": self.ip_analyser.traffic_volume_over_time,
             "High Traffic IPs": self.ip_analyser.monitor_high_traffic_ips
         }
     
@@ -1172,14 +1208,37 @@ class AnalysisTab(QWidget):
         try:
             method = self.analysis_methods.get(selected_analysis)
             if method:
-                method()  # Call the corresponding method
+                result = method()  # Call the corresponding method
+                print(type(result))
+                if isinstance(result, pd.DataFrame):
+                    # Single DataFrame case
+                    self.prompt_save_dataframe(result)
+                    
+                elif isinstance(result, tuple) and all(isinstance(df, pd.DataFrame) for df in result):
+                    # Tuple of DataFrames case
+                    for i, df in enumerate(result):
+                        self.prompt_save_dataframe(df, index=i + 1)
+
+                        
             else:
                 raise ValueError(f"Unknown analysis type: {selected_analysis}")
+        
         except AttributeError as e:
             QMessageBox.warning(self, "Error", f"Method not implemented: {e}")
-        except Exception as e:
-            QMessageBox.warning(self, "Error", f"An error occurred: {e}")
 
+
+    def prompt_save_dataframe(self, dataframe, index=None):
+        # Ask user if they want to save the dataframe
+        reply = QMessageBox.question(self, 'Save Data', 'Do you want to save the dataframe as a CSV file?', QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        
+        if reply == QMessageBox.Yes:
+            # Prompt the user for the file name and save location
+            options = QFileDialog.Options()
+            default_name = f"dataframe_{index}.csv" if index else "dataframe.csv"
+            file_path, _ = QFileDialog.getSaveFileName(self, "Save CSV File", default_name, "CSV Files (*.csv);;All Files (*)", options=options)
+            
+            if file_path:
+                dataframe.to_csv(file_path, index=False)  # Save the DataFrame as CSV
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
