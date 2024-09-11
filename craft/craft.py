@@ -1,7 +1,7 @@
 from scapy.all import Ether, ICMP , TCP , UDP ,IP, Raw , ETHER_TYPES , TCP_SERVICES, UDP_SERVICES  , IP_PROTOS ,sendp, send, srp, sr, sendpfast   
 
 
-import sys
+import sys , io
 from PyQt5.QtWidgets import QComboBox , QTextEdit,QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel, QLineEdit, QPushButton, QStackedWidget, QHBoxLayout, QFormLayout
 from PyQt5.QtCore import Qt
 
@@ -107,23 +107,41 @@ class PacketCrafter:
             raise ValueError(f"Invalid ICMP type name: {type_name}")
     
     def Ethernet(self , src: str, dst: str, type: int = 0x9000) : 
-        return Ether(src=src, dst=dst , type=type)
-    
+        if src and dst :
+            return Ether(src=src, dst=dst , type=type)
+        else : 
+            return None
     def Ip(self, src_ip: str, dst_ip: str, tos : int = 0, len: int = None, id: int = 1, frag: int = 0, ttl: int = 64, version: int = 4, proto ='ip'):
-        return IP(src=src_ip, dst=dst_ip, tos=tos, len=len, id=id, frag=frag, ttl=ttl, version=version, proto=proto)
-    
+        if src_ip and dst_ip :
+            return IP(src=src_ip, dst=dst_ip, tos=tos, len=len, id=id, frag=frag, ttl=ttl, version=version, proto=proto)
+        else :
+            return None
+        
     def icmp(self ,type_name=0, code_name=0):
-        return ICMP(type=type_name,code=code_name)
-    
-    def tcp(self ,sport, dport , seq=0, ack=0 , flags="S"):
-        return TCP(sport=sport, dport=dport, seq=seq, ack=ack, flags=flags) 
-    
-    def udp(self, sport, dport, length=None):
-        return UDP(sport=sport, dport=dport, len=length)
-    
-    def data(self, payload):
-        return Raw(load=payload)
+        try :
+            return ICMP(type=type_name,code=code_name)
+        except Exception :
+            return None
+    def tcp(self, dport, sport= None , seq=0, ack=0 , flags="S"):
+        if sport and dport :
+            return TCP(sport=sport, dport=dport, seq=seq, ack=ack, flags=flags) 
+        elif dport : 
+            return TCP(dport=dport, seq=seq, ack=ack, flags=flags)
+        else :
+            return None
+    def udp(self, dport ,sport= None, length=None):
+        if sport and dport :
+            return UDP(sport=sport, dport=dport, len=length)
+        elif dport :
+            return UDP(dport=dport, len=length)
+        else :
+            return None
 
+    def data(self, payload):
+        if payload :
+            return Raw(load=payload)
+        else :
+            None
     def craft_packet(self, ethernet_layer=None, ip_layer=None, transport_layer=None, data_layer=None):
         """Constructs a packet by stacking the provided layers."""
         layers = [layer for layer in [ethernet_layer, ip_layer, transport_layer, data_layer] if layer is not None]
@@ -137,50 +155,63 @@ class PacketCrafter:
 
         return self.packet
 
-    def display_packet(self):
-        """Print the details of the crafted packet."""
-        if self.packet:
-            self.packet.show()
-        else:
-            print("No packet crafted yet.")
-    def send_via_layer2(self):
-        """Send the crafted packet at Layer 2 (Ethernet)."""
-        if self.packet:
-            sendp(self.packet)
-        else:
-            print("No packet crafted to send.")
-        self.packet = None
-    def send_via_layer3(self):
-        """Send the crafted packet at Layer 3 (IP level)."""
-        if self.packet:
-            send(self.packet)
-        else:
-            print("No packet crafted to send.")
-        self.packet = None
-    def send_receive_layer2(self):
-        """Send and receive packets at Layer 2 (Ethernet)."""
-        if self.packet:
-            ans, unans = srp(self.packet, timeout=2)
-            ans.show()
-        else:
-            print("No packet crafted to send.")
-        self.packet = None
-    def send_receive_layer3(self):
-        """Send and receive packets at Layer 3 (IP level)."""
-        if self.packet:
-            ans, unans = sr(self.packet, timeout=2)
-            ans.show()
-        else:
-            print("No packet crafted to send.")
+    def display_packet(self,packet):
 
-        self.packet = None
-    def send_fast_layer2(self):
-        """Fast send at Layer 2 (Ethernet), useful for flooding."""
-        if self.packet:
-            sendpfast(self.packet)
-        else:
-            print("No packet crafted to send.")
-        self.packet = None
+        output_buffer = io.StringIO()
+
+        sys.stdout = output_buffer
+
+        packet.show()
+
+        sys.stdout = sys.__stdout__
+
+
+        captured_output = output_buffer.getvalue()
+
+        output_buffer.close()
+
+        return captured_output
+
+    def send_receive_layer2(self):
+        if self.packet :
+            ans, unans = srp(self.packet, timeout=2)
+
+            output_buffer = io.StringIO()
+
+            sys.stdout = output_buffer
+
+            ans.show()
+
+            sys.stdout = sys.__stdout__
+
+
+            captured_output = output_buffer.getvalue()
+
+            output_buffer.close()
+
+            return captured_output
+        
+    def send_receive_layer3(self):
+        if self.packet :
+            ans, unans = sr(self.packet, timeout=2)
+
+            output_buffer = io.StringIO()
+
+            sys.stdout = output_buffer
+
+            ans.show()
+
+            sys.stdout = sys.__stdout__
+
+
+            captured_output = output_buffer.getvalue()
+
+            output_buffer.close()
+            self.packet = None
+
+            return captured_output
+
+
 
 class PacketCrafterApp(QMainWindow):
     def __init__(self):
@@ -192,7 +223,7 @@ class PacketCrafterApp(QMainWindow):
             color: #FFFFFF; 
             font-family: Arial, sans-serif;
         """)
-        
+        self.packet_crafter = PacketCrafter()
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
         
@@ -239,6 +270,8 @@ class PacketCrafterApp(QMainWindow):
             background-color: #344953;
             color: #FFFFFF;
         """)
+        self.ether_type_combo.setCurrentText("IPv4")
+
         self.ether_type_combo.setFixedWidth(300)  # Adjust width as needed
 
         self.add_form_row("Ethernet Type:", self.ether_type_combo, self.ethernet_form_layout)
@@ -333,6 +366,8 @@ class PacketCrafterApp(QMainWindow):
             background-color: #344953;
             color: #FFFFFF;
         """)
+        self.ip_proto_combo.setCurrentText("ip")
+
         self.ip_proto_combo.setFixedWidth(300)  # Adjust width as needed
 
         self.add_form_row("Protocol:", self.ip_proto_combo, self.ip_form_layout)
@@ -370,6 +405,7 @@ class PacketCrafterApp(QMainWindow):
         self.stacked_widget.addWidget(self.page2)
         self.stacked_widget.addWidget(self.page3)
         self.create_data_page()
+        self.create_packet_page()
 
     def show_protocol_page(self, protocol):
         """Show the selected protocol page and remove any existing protocol pages."""
@@ -384,6 +420,14 @@ class PacketCrafterApp(QMainWindow):
                 self.stacked_widget.removeWidget(page4)
                 page4.deleteLater()
                 setattr(self, 'page4', None)
+        
+        if hasattr(self, 'page5'):
+            page5 = getattr(self, 'page4', None)
+            if page5:
+                self.stacked_widget.removeWidget(page4)
+                page5.deleteLater()
+                setattr(self, 'page5', None)
+
         current_page_attr = pages.get(protocol, None)
         
         if current_page_attr:
@@ -402,9 +446,8 @@ class PacketCrafterApp(QMainWindow):
                 self.stacked_widget.addWidget(current_page)
             
             self.create_data_page()
+            self.create_packet_page(    )
             self.stacked_widget.setCurrentWidget(current_page)
-        else:
-            print(f"Protocol page creation method not found for {protocol}")
 
     def create_tcp_page(self):
         """Create the TCP page layout."""
@@ -522,7 +565,7 @@ class PacketCrafterApp(QMainWindow):
             background-color: #344953;
             color: #FFFFFF;
         """)
-        self.icmp_type_combobox.setFixedWidth(300)  # Adjust width as needed
+        self.icmp_type_combobox.setFixedWidth(300)  
         for type_name, type_info in PacketCrafter.icmp_types_and_codes.items():
             self.icmp_type_combobox.addItem(type_name, type_info["type"])
         self.icmp_code_combobox = QComboBox()
@@ -565,13 +608,121 @@ class PacketCrafterApp(QMainWindow):
             background-color: #344953;
             color: #FFFFFF;
         """)
-        self.payload.setPlaceholderText("Enter payload here...")
+        self.payload.setPlaceholderText("")
 
         self.add_form_row("Payload:", self.payload, self.data_form_layout)
 
         self.page4_layout.addLayout(self.data_form_layout)
 
         self.stacked_widget.addWidget(self.page4)
+
+    def create_packet_page(self):
+        self.page5 = QWidget()
+        self.page5_layout = QVBoxLayout()
+        self.page5.setLayout(self.page5_layout)
+
+        self.page5_layout.addWidget(self.create_header("Packet Page"))
+        self.button_layout = QHBoxLayout()
+
+        self.display_packet = QPushButton("Craft and Display Packet")
+        self.display_packet.clicked.connect(self.create_display_packet)
+        self.button_layout.addWidget(self.display_packet)
+
+        # Packet display area
+        self.packet_display = QTextEdit()
+        self.packet_display.setStyleSheet("""
+            padding: 8px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.packet_display.setPlaceholderText("Packet information will be displayed here...")
+        self.packet_display.setReadOnly(True)
+
+        self.page5_layout.addWidget(self.packet_display)
+
+        self.response_display = QTextEdit()
+        self.response_display.setStyleSheet("""
+            padding: 8px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            background-color: #344953;
+            color: #FFFFFF;
+        """)
+        self.response_display.setPlaceholderText("Response will be displayed here...")
+        self.response_display.setReadOnly(True)
+        self.page5_layout.addWidget(self.response_display)
+
+
+        self.send_recv_layer2_button = QPushButton("Send and Receive via Layer 2")
+        self.send_recv_layer3_button = QPushButton("Send and Receive via Layer 3")
+        
+        self.send_recv_layer2_button.clicked.connect(lambda : self.response_display.setText(self.packet_crafter.send_receive_layer2()))
+        self.send_recv_layer3_button.clicked.connect(lambda : self.response_display.setText(self.packet_crafter.send_receive_layer3()))
+
+        self.button_layout.addWidget(self.send_recv_layer2_button)
+        self.button_layout.addWidget(self.send_recv_layer3_button)
+
+
+
+        # Add widgets to the layout
+        self.page5_layout.addLayout(self.button_layout)
+
+        # Add the page to the stacked widget
+        self.stacked_widget.addWidget(self.page5)
+
+    def create_display_packet(self):
+        self.ethernet_data = {
+            "src": self.ether_src_input.text() if self.ether_src_input.text() != "" else None ,
+            "dst": self.ether_dst_input.text() if self.ether_dst_input.text() != "" else None,
+            "type": self.ether_type_combo.currentText()
+        }
+        Ethernet_layer = self.packet_crafter.Ethernet(**self.ethernet_data)
+
+        self.ip_data = {
+        "src_ip": self.ip_src_input.text() if self.ip_src_input.text() != "" else None,
+        "dst_ip": self.ip_dst_input.text() if self.ip_dst_input.text() != "" else None,
+        "tos": int(self.ip_tos_input.text()) if self.ip_tos_input.text()  != "" else 0,
+        "len": int(self.ip_len_input.text()) if self.ip_len_input.text() != 'None' else None,
+        "id":  int(self.ip_id_input.text()) if self.ip_id_input.text() != "" else 1,
+        "frag": int( self.ip_frag_input.text()) if self.ip_frag_input.text() != "" else 0,
+        "ttl": int(self.ip_ttl_input.text()) if self.ip_ttl_input.text()  != ""  else 64,
+        "version": int(self.ip_version_input.text()) if self.ip_version_input.text() != "" else 4,
+        "proto": self.ip_proto_combo.currentText()
+        }
+        IP_layer = self.packet_crafter.Ip(**self.ip_data)
+
+        if hasattr(self, 'tcp_page') :
+            self.transport_data = {
+                "sport": int(self.tcp_src_port_input.text()) if self.tcp_src_port_input.text() !="" else None,
+                "dport": int(self.tcp_dst_port_input.text())if self.tcp_dst_port_input.text() !="" else None,
+                "seq": int(self.tcp_seq_input.text())if self.tcp_seq_input.text() !="" else 0,
+                "ack": int(self.tcp_ack_input.text()) if self.tcp_ack_input.text() !="" else 0,
+                "flags": self.tcp_flags_input.text()if self.tcp_flags_input.text() !="" else "S"
+            }
+            transport_layer = self.packet_crafter.tcp(**self.transport_data)
+
+        elif hasattr(self, 'udp_page') :
+            self.transport_data = {
+                "sport": int(self.udp_src_port_input.text())if self.udp_src_port_input.text() !="" else None,
+                "dport": int(self.udp_dst_port_input.text())if self.udp_dst_port_input.text() !="" else None,
+                "length": int(self.udp_length_input.text()) if self.udp_length_input.text() != "" else None
+            }
+            transport_layer = self.packet_crafter.udp(**self.transport_data)
+
+        elif hasattr(self, 'icmp_page') :
+            self.transport_data = {
+                "type_name": self.icmp_type_combobox.currentData(),
+                "code_name": int(self.icmp_code_combobox.currentData()) if self.icmp_code_combobox.currentData() is not None else 0
+            }
+            transport_layer = self.packet_crafter.icmp(**self.transport_data)
+
+        self.data_payload = self.payload.toPlainText() if self.payload.toPlainText() != "" else None 
+        data_layer = self.packet_crafter.data(self.data_payload)
+        packet = self.packet_crafter.craft_packet(Ethernet_layer , IP_layer , transport_layer , data_layer)
+        if packet :
+            self.packet_display.setText(self.packet_crafter.display_packet(packet))
 
     def update_icmp_code_combobox(self):
         """Update the ICMP Code combobox based on the selected ICMP Type."""
@@ -609,7 +760,6 @@ class PacketCrafterApp(QMainWindow):
         """)
         return header
     
-
     def init_navigation_buttons(self):
         """Initialize navigation buttons at the bottom of the main layout."""
         self.navigation_layout = QHBoxLayout()
@@ -631,6 +781,7 @@ class PacketCrafterApp(QMainWindow):
             background-color: #344953;
             color: #FFFFFF;
         """)
+        self.prev_button.setVisible(False)
         self.next_button.clicked.connect(self.go_next)
 
         self.navigation_layout.addWidget(self.prev_button)
@@ -655,8 +806,9 @@ class PacketCrafterApp(QMainWindow):
         current_index = self.stacked_widget.currentIndex()
         self.prev_button.setEnabled(current_index > 0)
 
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    main_window = PacketCrafterApp()
-    main_window.show()
-    sys.exit(app.exec_())
+        if current_index == 0 :
+            self.prev_button.setVisible(False)
+        else :
+            self.prev_button.setVisible(True)
+
+

@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QMenuBar,
     QAction, QStatusBar, QHBoxLayout, QFrame, QScrollArea, QRadioButton,
     QButtonGroup, QPushButton, QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView , QLineEdit , QStackedWidget , QGridLayout , QFileDialog
-    , QDialog , QTextEdit , QToolBox , QListWidget , QDialogButtonBox , QMessageBox , QTreeView, QFileSystemModel , QMenu
+    , QDialog , QTextEdit , QToolBox , QListWidget , QSpacerItem , QMessageBox , QTreeView, QFileSystemModel, QSizePolicy
 )
 from PyQt5.QtCore import Qt, QMetaObject, Q_ARG, pyqtSlot ,  QThread, pyqtSignal
 from scapy.all import  IP_PROTOS  , Ether , wrpcap , hexdump
@@ -18,6 +18,7 @@ from services.dhcp import DHCP
 from services.dns import DNS
 from monitoring.logger import Logger
 from visualization.main import NTA , EtherAnalyzer , IpAnalyzer , TransportAnalyzer
+from craft.craft import PacketCrafterApp
 
 class SnifferThread(QThread):
     packet_received = pyqtSignal(object)
@@ -408,7 +409,7 @@ class SnifferApp(QMainWindow):
         self.analyzer_tab = AnalysisTab(self ) 
         self.tabs.addTab(self.analyzer_tab, "Analysis")
 
-        self.add_tab("Packet Crafter ", "#2A363B")
+        self.add_packet_crafter_tab("Packet Crafter ", "#2A363B")
         
         self.log_tab = LoggerTab(Logger.base_dir)
         self.tabs.addTab(self.log_tab, "Logs")
@@ -461,10 +462,46 @@ class SnifferApp(QMainWindow):
 
         self.tabs.addTab(services_widget, "Services")
     
-    def add_tab(self, title, color):
+    def add_packet_crafter_tab(self, title, color):
         tab = QWidget()
         tab.setStyleSheet(f"background-color: {color};")
+
+        main_layout = QVBoxLayout()
+        tab.setLayout(main_layout)
+
+        center_layout = QHBoxLayout()
+
+        button = QPushButton("Initialize Packet Crafter")
+        button.setStyleSheet("""
+            QPushButton {
+                border: 2px solid #202C31;
+                border-radius: 15px;
+                padding: 15px;
+                background-color: #202C31;
+                color: #FFFFFF;
+                font-size: 20px;;
+            }
+            QPushButton:hover {
+                background-color: #151D20;
+            }
+            QPushButton:pressed {
+                background-color: #151D20;
+            }
+        """)
+                             
+        button.setFixedSize(300, 100)  
+        button.clicked.connect(self.initialize_packet_crafter)
+
+        center_layout.addWidget(button)
+        center_layout.setAlignment(button, Qt.AlignCenter)  
+
+        main_layout.addLayout(center_layout)
         self.tabs.addTab(tab, title)
+
+    def initialize_packet_crafter(self):
+        self.packet_crafter_window = PacketCrafterApp()
+        self.packet_crafter_window.show()
+
 
     def add_sniffer_tab(self):
 
@@ -765,7 +802,7 @@ class SnifferApp(QMainWindow):
                 json.dump(data, file, indent=4)
                 
     def open_documentation(self):
-        webbrowser.open("https://your.documentation.url")
+        webbrowser.open("https://github.com/NizarKarroud/NetSecPy")
 
     def pyshark_to_scapy(self , pyshark_packet):
         raw_bytes = bytes(pyshark_packet.get_raw_packet())
