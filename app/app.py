@@ -1044,69 +1044,75 @@ class AnalysisTab(QWidget):
         self.parent = parent
 
     def init_ui(self):
-        # Create the stacked widget to switch between pages
-        self.stacked_widget = QStackedWidget(self)
-        
-        # Create and add the choice page
-        self.choice_page = QWidget()
-        self.choice_layout = QVBoxLayout(self.choice_page)
-        
-        # Create radio buttons
-        self.packet_radio = QRadioButton("Packets")
-        self.file_radio = QRadioButton("File")
-        self.file_radio.setChecked(True)  # Set default to "File"
-                
-        # Create the "Next" button
-        self.next_button = QPushButton("Next")
-        self.next_button.clicked.connect(self.next_page)
-        
-        # Add widgets to layout
-        self.choice_layout.addWidget(self.packet_radio)
-        self.choice_layout.addWidget(self.file_radio)
-        self.choice_layout.addWidget(self.next_button)
-        
-        self.stacked_widget.addWidget(self.choice_page)
-        
-        # Create and add the analysis options page
-        self.analysis_page = QWidget()
-        self.analysis_layout = QVBoxLayout(self.analysis_page)
-        
-        # Create the toolbox
-        self.toolbox = QToolBox()
-        self.toolbox.setStyleSheet("""
-            QToolBox::tab {
-                background: #202C31;
-                color: #FFFFFF;
-                border: 1px solid #444444;
-                padding: 2px 16px; 
-                min-height: 50px; 
-                min-width: 150px; 
-            }
-            QToolBox::tab:selected {
-                background: #202C31;
-                font-weight: bold;
-            }
-        """)
-        
-        self.add_analysis_section("Ethernet Layer", ["Communication Graph", "MAC Frequency Analysis", "Mac Pairs Analysis ", "Analyze Ethernet Types" , "Detect ARP poisoning","Broadcast Traffic Analysis"])
-        self.add_analysis_section("IP Layer", ["IP Communication Graph", "Analyze TTL", "IP Frequency Analysis ", "IP Pair Analysis" , "Traffic Volume Analysis","High Traffic IPs"])
-        
-        self.analysis_layout.addWidget(self.toolbox)
-        self.stacked_widget.addWidget(self.analysis_page)
-        
-        # Set up the main layout
-        main_layout = QVBoxLayout(self)
-        main_layout.addWidget(self.stacked_widget)
-        self.setLayout(main_layout)
-        
-        # Variable to hold the selected file path
-        self.selected_file_path = None
-        
-        # Show the choice page initially
-        self.stacked_widget.setCurrentWidget(self.choice_page)
-        
+            # Create the stacked widget to switch between pages
+            self.stacked_widget = QStackedWidget(self)
+            
+            # Create and add the choice page
+            self.choice_page = QWidget()
+            self.choice_layout = QVBoxLayout(self.choice_page)
+            
+            # Create radio buttons
+            self.packet_radio = QRadioButton("Packets")
+            self.file_radio = QRadioButton("File")
+            self.file_radio.setChecked(True)  # Set default to "File"
+                    
+            # Create the "Next" button
+            self.next_button = QPushButton("Next")
+            self.next_button.clicked.connect(self.next_page)
+            
+            # Add widgets to layout
+            self.choice_layout.addWidget(self.packet_radio)
+            self.choice_layout.addWidget(self.file_radio)
+            self.choice_layout.addWidget(self.next_button)
+            
+            self.stacked_widget.addWidget(self.choice_page)
+            
+            # Create and add the analysis options page
+            self.analysis_page = QWidget()
+            self.analysis_layout = QVBoxLayout(self.analysis_page)
+            
+            # Create the toolbox
+            self.toolbox = QToolBox()
+            self.toolbox.setStyleSheet("""
+                QToolBox::tab {
+                    background: #202C31;
+                    color: #FFFFFF;
+                    border: 1px solid #444444;
+                    padding: 2px 16px; 
+                    min-height: 50px; 
+                    min-width: 150px; 
+                }
+                QToolBox::tab:selected {
+                    background: #202C31;
+                    font-weight: bold;
+                }
+            """)
+            
+            # Add analysis sections
+            self.add_analysis_section("Ethernet Layer", [
+                "Communication Graph", "MAC Frequency Analysis", "Mac Pairs Analysis", 
+                "Analyze Ethernet Types", "Detect ARP scanning", "Broadcast Traffic Analysis"
+            ])
+            self.add_analysis_section("IP Layer", [
+                "IP Communication Graph", "Analyze TTL", "IP Frequency Analysis", 
+                "IP Pair Analysis", "Traffic Volume Analysis", "High Traffic IPs"
+            ])
+            
+            self.analysis_layout.addWidget(self.toolbox)
+            self.stacked_widget.addWidget(self.analysis_page)
+            
+            # Set up the main layout
+            main_layout = QVBoxLayout(self)
+            main_layout.addWidget(self.stacked_widget)
+            self.setLayout(main_layout)
+            
+            # Variable to hold the selected file path
+            self.selected_file_path = None
+            
+            # Show the choice page initially
+            self.stacked_widget.setCurrentWidget(self.choice_page)
 
-        
+
     def add_analysis_section(self, title, items):
         # Create a widget for the section
         section_widget = QWidget()
@@ -1120,11 +1126,14 @@ class AnalysisTab(QWidget):
         # Add the section widget to the toolbox
         self.toolbox.addItem(section_widget, title)
         
+        # Connect list widget item selection to analysis methods
+        list_widget.itemClicked.connect(self.handle_analysis_selection)
+        
     def open_file_dialog(self):
         if self.file_radio.isChecked():
             options = QFileDialog.Options()
             options |= QFileDialog.ReadOnly
-            file_path, _ = QFileDialog.getOpenFileName(self, "Select a File", "", "All Files (*);;Text Files (*.txt)", options=options)
+            file_path, _ = QFileDialog.getOpenFileName(self, "Select a File", "", "All Files (*);;Pcap Files (*.pcap)", options=options)
             
             if file_path:
                 self.selected_file_path = file_path
@@ -1141,8 +1150,36 @@ class AnalysisTab(QWidget):
         
         self.ether_analyser = EtherAnalyzer(self.nta.data)
         self.ip_analyser = IpAnalyzer(self.nta.data)
-        print(self.ether_analyser.ether_data)
-        print(self.ip_analyser.ip_data)
+        
+        # Mapping of analysis options to methods
+        self.analysis_methods = {
+            "Communication Graph": self.ether_analyser.visualize_ether_communication_graph,
+            "MAC Frequency Analysis": self.ether_analyser.mac_frequency_analysis,
+            "Mac Pairs Analysis": self.ether_analyser.mac_pair_analysis,
+            "Analyze Ethernet Types": self.ether_analyser.analyze_traffic_types,
+            "Detect ARP scanning": self.ether_analyser.detect_arp_scanning,
+            "Broadcast Traffic Analysis": self.ether_analyser.broadcast_traffic_analysis,
+            "IP Communication Graph": self.ip_analyser.visualize_ip_communication_graph,
+            "Analyze TTL": self.ip_analyser.analyze_ttl,
+            "IP Frequency Analysis": self.ip_analyser.ip_frequency_analysis,
+            "IP Pair Analysis": self.ip_analyser.ip_pair_analysis,
+            "Traffic Volume Analysis": self.ip_analyser.traffic_volume_over_time,
+            "High Traffic IPs": self.ip_analyser.monitor_high_traffic_ips
+        }
+    
+    def handle_analysis_selection(self, item):
+        selected_analysis = item.text()
+        try:
+            method = self.analysis_methods.get(selected_analysis)
+            if method:
+                method()  # Call the corresponding method
+            else:
+                raise ValueError(f"Unknown analysis type: {selected_analysis}")
+        except AttributeError as e:
+            QMessageBox.warning(self, "Error", f"Method not implemented: {e}")
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"An error occurred: {e}")
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
@@ -1151,3 +1188,8 @@ if __name__ == "__main__":
     sniffer_app = SnifferApp()
     sniffer_app.show()
     sys.exit(app.exec_())
+
+
+"""
+add an update button to the analysis for live analysis , the function is in the NTA and layers classes , to udpate the data
+"""
