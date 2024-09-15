@@ -187,8 +187,8 @@ class SnifferApp(QMainWindow):
 
         self.selected_interface = None
 
-        self.packet_buffer = []  # List to hold packets for batch processing
-        self.batch_size = 20    # Number of packets to accumulate before updating the table (lower value if the network is small)
+        self.packet_buffer = []  
+        self.batch_size = 50    
 
 
         self.paused = False
@@ -693,53 +693,58 @@ class SnifferApp(QMainWindow):
     def update_table(self, packet_list):
         if not self.paused:
             for packet in packet_list:
-                if 'IP' in packet:
-                    timestamp = str(packet.sniff_time)
+                timestamp = str(packet.sniff_time)
+                if hasattr(packet, 'ip'):
                     src_ip = packet.ip.src
-                    dest_ip = packet.ip.dst
+                    dst_ip = packet.ip.dst
                     proto = IP_PROTOS.d.get(int(packet.ip.proto), f"{packet.ip.proto}")
-                    length = str(len(packet))
+                else :
+                    src_ip = "N/A"
+                    dst_ip = "N/A"
+                    proto = "N/A"
 
-                    try:
-                        if hasattr(packet, proto):
-                            layer = getattr(packet, proto)
-                            src_port = str(getattr(layer, 'srcport', None)) if hasattr(layer, 'srcport') else None
-                            dst_port = str(getattr(layer, 'dstport', None)) if hasattr(layer, 'dstport') else None
-                        else:
-                            src_port = None
-                            dst_port = None
-                    except Exception:
-                        src_port = None
-                        dst_port = None
+                length = str(len(packet))
 
-                    row_position = self.sniffer_table.rowCount()
-                    self.sniffer_table.insertRow(row_position)
-                    self.sniffer_table.setItem(row_position, 0, QTableWidgetItem(timestamp))
-                    self.sniffer_table.setItem(row_position, 1, QTableWidgetItem(src_ip))
-                    self.sniffer_table.setItem(row_position, 2, QTableWidgetItem(dest_ip))
-                    self.sniffer_table.setItem(row_position, 3, QTableWidgetItem(proto))
-                    self.sniffer_table.setItem(row_position, 4, QTableWidgetItem(length))
-                    self.sniffer_table.setItem(row_position, 5, QTableWidgetItem(src_port))
-                    self.sniffer_table.setItem(row_position, 6, QTableWidgetItem(dst_port))
+                try:
+                    if hasattr(packet, proto):
+                        layer = getattr(packet, proto)
+                        src_port = str(getattr(layer, 'srcport', "N/A")) 
+                        dst_port = str(getattr(layer, 'dstport', "N/A"))
+                    else:
+                        src_port = "N/A"
+                        dst_port = "N/A"
+                except Exception:
+                    src_port = "N/A"
+                    dst_port = "N/A"
 
-                    more_info_button = QPushButton("More Info")
-                    more_info_button.setStyleSheet("""
-                        QPushButton {
-                            background-color: #202C31;
-                            color: #FFFFFF;
-                            font-size: 14px;
-                            padding: 5px;
-                            border-radius: 5px;
-                        }
-                        QPushButton:hover {
-                            background-color: #151D20;
-                        }
-                        QPushButton:pressed {
-                            background-color: #0F1416;
-                        }
-                    """)
-                    more_info_button.clicked.connect(lambda: self.show_packet(packet))
-                    self.sniffer_table.setCellWidget(row_position, 7, more_info_button)
+                row_position = self.sniffer_table.rowCount()
+                self.sniffer_table.insertRow(row_position)
+                self.sniffer_table.setItem(row_position, 0, QTableWidgetItem(timestamp))
+                self.sniffer_table.setItem(row_position, 1, QTableWidgetItem(src_ip))
+                self.sniffer_table.setItem(row_position, 2, QTableWidgetItem(dst_ip))
+                self.sniffer_table.setItem(row_position, 3, QTableWidgetItem(proto))
+                self.sniffer_table.setItem(row_position, 4, QTableWidgetItem(length))
+                self.sniffer_table.setItem(row_position, 5, QTableWidgetItem(src_port))
+                self.sniffer_table.setItem(row_position, 6, QTableWidgetItem(dst_port))
+
+                more_info_button = QPushButton("More Info")
+                more_info_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #202C31;
+                        color: #FFFFFF;
+                        font-size: 14px;
+                        padding: 5px;
+                        border-radius: 5px;
+                    }
+                    QPushButton:hover {
+                        background-color: #151D20;
+                    }
+                    QPushButton:pressed {
+                        background-color: #0F1416;
+                    }
+                """)
+                more_info_button.clicked.connect(lambda: self.show_packet(packet))
+                self.sniffer_table.setCellWidget(row_position, 7, more_info_button)
 
     def show_packet(self,packet):
         details_window = PacketDetailsWindow(packet,self)
