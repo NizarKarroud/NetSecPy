@@ -1,7 +1,7 @@
 from scapy.all import Ether, ARP, srp  ,sr , IP , TCP , ICMP , UDP , traceroute , send , sr1 
 import subprocess
 import ipaddress
-
+from services.nmap import NmapCMD
 class Scanner:
     def __init__(self, MAC, IP , subnet) -> None:
         self.__mac = MAC
@@ -10,24 +10,11 @@ class Scanner:
         self._net_obj = ipaddress.ip_network(f'{self.__ip}/{self.__subnet}', strict=False)
         self.__hosts = [str(ip) for ip in self._net_obj.hosts()]
         self.__network = self._net_obj.with_prefixlen
-
-        
+        self._nmapcmd = NmapCMD()
     def arp_scan(self):
-        try:
-            command = ["nmap", "-sn" , "-PR" ,self.__network]
 
+        return self._nmapcmd.run(["nmap", "-sn" , "-PR" ,self.__network])
 
-            result = subprocess.run(command, capture_output=True, text=True)
-
-
-            if result.returncode != 0:
-                print(f"Error running  scan: {result.stderr}")
-            else:
-
-                return result.stdout
-
-        except Exception as e:
-            return str(e)
 
     def tcp_syn_scan(self , dst_ip: str , timeout : int =1 , port : int =80 ):
         try:
@@ -83,103 +70,25 @@ class Scanner:
             return err
 
     def tcp_traceroute(self , target_ip: str ):
-        try:
-            command = ["nmap", "--traceroute"  , target_ip]
 
-
-            result = subprocess.run(command, capture_output=True, text=True)
-
-
-            if result.returncode != 0:
-                print(f"Error running scan: {result.stderr}")
-            else:
-
-                return result.stdout
-
-        except Exception as e:
-            return str(e)
+        return self._nmapcmd.run(["nmap", "--traceroute"  , target_ip])
 
     def idle_scan(self , zombie_ip: str, target_ip: str):
-        try:
-            command = ["nmap", "-Pn" , "-sI" , zombie_ip, target_ip]
 
-
-            result = subprocess.run(command, capture_output=True, text=True)
-
-
-            if result.returncode != 0:
-                print(f"Error running scan: {result.stderr}")
-            else:
-
-                return result.stdout
-
-        except Exception as e:
-            return str(e)
+        return self._nmapcmd.run(["nmap", "-Pn" , "-sI" , zombie_ip, target_ip])
 
     def fin_scan(self , target_ip : str):
-        try:
-            command = ["nmap", "-sF"  , target_ip]
-
-
-            result = subprocess.run(command, capture_output=True, text=True)
-
-
-            if result.returncode != 0:
-                print(f"Error running scan: {result.stderr}")
-            else:
-
-                return result.stdout
-
-        except Exception as e:
-            return str(e)
+ 
+        return self._nmapcmd.run(["nmap", "-sF"  , target_ip])
        
     def null_scan(self , target_ip: str ):
-        try:
-            command = ["nmap", "-sN"  , target_ip]
 
-
-            result = subprocess.run(command, capture_output=True, text=True)
-
-
-            if result.returncode != 0:
-                print(f"Error running scan: {result.stderr}")
-            else:
-
-                return result.stdout
-
-        except Exception as e:
-            return str(e)
+        return self._nmapcmd.run(["nmap", "-sN"  , target_ip])
 
     def xmas_scan(self , target_ip: str ):
-        try:
-            command = ["nmap", "-sX"  , target_ip]
 
-
-            result = subprocess.run(command, capture_output=True, text=True)
-
-
-            if result.returncode != 0:
-                print(f"Error running scan: {result.stderr}")
-            else:
-
-                return result.stdout
-
-        except Exception as e:
-            return str(e)
+        return self._nmapcmd.run(["nmap", "-sX"  , target_ip])
     
     def os(self,target_ip : str):
-        try:
-            command = ["nmap", "-O"  , target_ip]
 
-
-            result = subprocess.run(command, capture_output=True, text=True)
-
-
-            if result.returncode != 0:
-                print(f"Error running scan: {result.stderr}")
-            else:
-
-                return result.stdout
-
-        except Exception as e:
-            return str(e)
+        return self._nmapcmd.run(["nmap", "-AO"  , target_ip])

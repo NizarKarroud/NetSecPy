@@ -213,7 +213,7 @@ class ResultWindow(QDialog):
 
         self.setLayout(layout)
 
-class SnifferApp(QMainWindow):
+class NetSecApp(QMainWindow):
     def __init__(self):
         super().__init__()
         
@@ -1298,7 +1298,7 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setWindowIcon(QIcon('netsec.ico'))
 
-    sniffer_app = SnifferApp()
+    sniffer_app = NetSecApp()
     sniffer_app.show()
     sys.exit(app.exec_())
 
