@@ -2,16 +2,16 @@ from PyQt5.QtCore import QAbstractTableModel, Qt, QThread, pyqtSignal
 from PyQt5.QtWidgets import QTableView, QVBoxLayout, QWidget, QApplication , QDialog, QTextEdit, QTabWidget , QMainWindow , QAction , QHBoxLayout ,QLineEdit ,QPushButton
 import pyshark
 import asyncio
-from scapy.all import Ether, hexdump , IP_PROTOS
+from scapy.all import Ether, hexdump , IP_PROTOS ,wrpcap
 import io
 
 class PacketTableModel(QAbstractTableModel):
-    def __init__(self, data):
+    def __init__(self):
         super(PacketTableModel, self).__init__()
-        self._data = data
+        self._data = []
         self.headers = ["No.", "Timestamp", "Source IP", "Destination IP", "Protocol", "Length", "Source Port", "Destination Port"]
-        self._packets = []  # Store packets directly here
-
+        self._packets = []  
+        
     def data(self, index, role):
         if role == Qt.DisplayRole:
             if index.column() == 0:
@@ -34,13 +34,18 @@ class PacketTableModel(QAbstractTableModel):
     def addData(self, new_data, packet):
         self.beginInsertRows(self.index(self.rowCount(self), 0), self.rowCount(self), self.rowCount(self) + len(new_data) - 1)
         self._data.extend(new_data)
-        self._packets.extend(packet)  # Store the actual packets
+        self._packets.extend(packet)  
         self.endInsertRows()
 
     def getPacket(self, row):
         if 0 <= row < len(self._packets):
             return self._packets[row]
         return None
+    
+    def clearData(self):
+        self.beginResetModel()  
+        self._data.clear()
+        self.endResetModel() 
 
 class SnifferThread(QThread):
     packet_received = pyqtSignal(object)
@@ -115,10 +120,9 @@ class PacketSnifferUI(QWidget):
     def __init__(self,selected_interface="Wi-Fi"):
         super().__init__()
         self.paused = False
-
+        self.packets = []
         self.selected_interface = selected_interface
-        self.packet_data = []
-        self.table_model = PacketTableModel(self.packet_data)
+        self.table_model = PacketTableModel()
         self.table_view = QTableView()
         self.table_view.setModel(self.table_model)
         self.table_view.clicked.connect(self.on_row_click)
@@ -241,8 +245,6 @@ class PacketSnifferUI(QWidget):
 
         self.start_sniffing()
 
-    def apply_filters(self):
-        print(len(self.packet_data))
 
     def start_sniffing(self):
         if hasattr(self , "sniffer_thread" ) and self.sniffer_thread:
@@ -265,7 +267,8 @@ class PacketSnifferUI(QWidget):
             self.sniffer_thread.stop()
             self.pause_button.setText("Resume")
 
-    def process_packet(self, packet):
+    def process_packet(self, packet , filtered_from_pcap=False):
+        self.packets.append(packet)
         try:
             timestamp = str(packet.sniff_time)
             if hasattr(packet, 'ip'):
@@ -292,8 +295,8 @@ class PacketSnifferUI(QWidget):
                 dst_port = "N/A"
 
             row_data = [str(timestamp), src_ip, dst_ip, proto, length, src_port, dst_port]
-            self.table_model.addData([row_data], [packet])  # Store the actual packet with the data
 
+            self.table_model.addData([row_data], [packet])  
 
         except Exception as e:
             print(f"Error processing packet: {e}")
@@ -310,7 +313,23 @@ class PacketSnifferUI(QWidget):
         self.sniffer_thread.stop()
         event.accept()
 
+    def apply_filters(self):
+        self.sniffer_thread.stop()
+        self.sniffer_thread.wait()
+        self.table_model.clearData()
+        if self.filter_input.text() :
+            wrpcap("temp.pcap" , [self.pyshark_to_scapy(packet) for packet in  self.table_model._packets])
+            self.filtered_packets = [packet for packet in pyshark.FileCapture('temp.pcap', display_filter=self.filter_input.text() , use_json=True , include_raw=True) ]
+            self.table_model._packets.clear()  
+            for filtered_packet in self.filtered_packets :
+                self.process_packet(filtered_packet , filtered_from_pcap=True)
+        self.start_sniffing()
 
+    def pyshark_to_scapy(self , pyshark_packet):
+        raw_bytes = bytes(pyshark_packet.get_raw_packet())
+
+        scapy_packet = Ether(raw_bytes)
+        return scapy_packet
 
 class MainApp(QMainWindow):
     def __init__(self):

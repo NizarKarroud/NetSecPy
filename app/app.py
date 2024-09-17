@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QMenuBar,
     QAction, QStatusBar, QHBoxLayout, QFrame, QScrollArea, QRadioButton,
     QButtonGroup, QPushButton, QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView , QLineEdit , QStackedWidget , QGridLayout , QFileDialog
-    , QDialog , QTextEdit , QToolBox , QListWidget , QSpacerItem , QMessageBox , QTreeView, QFileSystemModel, QSizePolicy
+    , QDialog , QTextEdit , QToolBox , QListWidget , QMessageBox , QTreeView, QFileSystemModel
 )
 from PyQt5.QtCore import Qt, QMetaObject, Q_ARG, pyqtSlot ,  QThread, pyqtSignal
 from scapy.all import  IP_PROTOS  , Ether , wrpcap , hexdump
@@ -663,21 +663,26 @@ class SnifferApp(QMainWindow):
         self.sniffer_thread.start()
 
     def pyshark_packet_handler(self, packet, filtered_from_pcap=False):
-        if not filtered_from_pcap:
+        if filtered_from_pcap == False:
             self.packets.append(packet)
 
-        # Accumulate packets in the buffer
-        self.packet_buffer.append(packet)
-        print(len(self.packet_buffer))
-        if len(self.packet_buffer) >= self.batch_size:
-            # If buffer is full, process and update the table
+            self.packet_buffer.append(packet)
+            if len(self.packet_buffer) >= self.batch_size:
+                # If buffer is full, process and update the table
+                QMetaObject.invokeMethod(
+                    self, "update_table",
+                    Qt.QueuedConnection,
+                    Q_ARG(list, self.packet_buffer)
+                )
+                self.packet_buffer = [] 
+
+        else : 
             QMetaObject.invokeMethod(
                 self, "update_table",
                 Qt.QueuedConnection,
-                Q_ARG(list, self.packet_buffer)
+                Q_ARG(list, self.filtered_packets)
             )
-            self.packet_buffer = [] 
-
+            self.filtered_packets = []
     def apply_filters(self):
             self.sniffer_thread.stop()
             self.sniffer_thread.wait()
@@ -685,8 +690,7 @@ class SnifferApp(QMainWindow):
             if self.filter_input.text() :
                 wrpcap("temp.pcap" , [self.pyshark_to_scapy(packet) for packet in  self.packets])
                 self.filtered_packets = [packet for packet in pyshark.FileCapture('temp.pcap', display_filter=self.filter_input.text() , use_json=True , include_raw=True) ]
-                for filtered_packet in self.filtered_packets :
-                    self.pyshark_packet_handler(filtered_packet , filtered_from_pcap=True)
+                self.pyshark_packet_handler(self.filtered_packets , filtered_from_pcap=True)
             self.start_sniffing()
     
     @pyqtSlot(list)
@@ -1312,7 +1316,3 @@ if __name__ == "__main__":
     sniffer_app.show()
     sys.exit(app.exec_())
 
-
-"""
-add an update button to the analysis for live analysis , the function is in the NTA and layers classes , to udpate the data
-"""
