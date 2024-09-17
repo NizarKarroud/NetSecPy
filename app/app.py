@@ -31,11 +31,9 @@ class PacketTableModel(QAbstractTableModel):
     def data(self, index, role):
         if role == Qt.DisplayRole:
             if index.column() == 0:
-                # Display row number
                 return str(index.row() + 1)
             else:
-                return str(self._data[index.row()][index.column() - 1])  # Adjust column index for data
-
+                return str(self._data[index.row()][index.column() - 1])  
     def rowCount(self, index):
         return len(self._data)
 
@@ -543,7 +541,7 @@ class SnifferApp(QMainWindow):
         file_name, _ = QFileDialog.getSaveFileName(self, "Save PCAP File", "", "PCAP Files (*.pcap);;All Files (*)", options=options)
         
         if not file_name:
-            return  # User canceled the dialog
+            return   
         
         try :
             scapy_packets = [self.packet_sniffer.pyshark_to_scapy(packet) for packet in  self.packet_sniffer.packets]
@@ -573,7 +571,6 @@ class SnifferApp(QMainWindow):
             for row in range(model.rowCount(model)):
                 row_data = model.get_row_data(row)
                 if row_data:
-                    # Convert row data to a dictionary with column headers as keys
                     row_dict = {
                         "Timestamp": row_data[0],
                         "Source IP": row_data[1],
@@ -679,10 +676,8 @@ class SnifferTab(QWidget):
             }
         """)
 
-        # Filter input and apply button layout
         filter_layout = QHBoxLayout()
 
-        # Add the filter input and button
         self.filter_input = QLineEdit(self)
         self.filter_input.setPlaceholderText("Enter Display filter...")
         self.filter_input.setStyleSheet("""
@@ -716,12 +711,10 @@ class SnifferTab(QWidget):
         """)
         filter_layout.addWidget(self.apply_filter_button)
 
-        # Connect button to filter logic (placeholder for now)
         self.apply_filter_button.clicked.connect(self.apply_filters)
 
-        # Set layout
         layout = QVBoxLayout()
-        layout.addLayout(filter_layout)  # Add the filter layout first
+        layout.addLayout(filter_layout)  
         layout.addWidget(self.table_view)
 
         self.pause_button = QPushButton("Pause", self)
@@ -791,15 +784,11 @@ class SnifferTab(QWidget):
 
     def on_row_click(self, index):
         row = index.row()
-        packet = self.table_model.getPacket(row)  # Retrieve the actual packet from the model
+        packet = self.table_model.getPacket(row) 
         if packet:
             details_window = PacketDetailsWindow(packet)
             details_window.exec_()
 
-    def closeEvent(self, event):
-        # Stop the sniffer thread on window close
-        self.sniffer_thread.stop()
-        event.accept()
 
     def apply_filters(self):
         self.sniffer_thread.stop()
@@ -1236,7 +1225,7 @@ class AnalysisTab(QWidget):
         if self.file_radio.isChecked():
             self.open_file_dialog()
         else:
-            self.update_packets_button.setVisible(True)  # Show the button
+            self.update_packets_button.setVisible(True)  
             self.nta = NTA(packets=[self.parent.packet_sniffer.pyshark_to_scapy(packet) for packet in self.parent.packet_sniffer.packets])
             self.stacked_widget.setCurrentWidget(self.analysis_page)
    

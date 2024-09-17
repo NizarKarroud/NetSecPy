@@ -272,8 +272,7 @@ class PacketCrafterApp(QMainWindow):
         """)
         self.ether_type_combo.setCurrentText("IPv4")
 
-        self.ether_type_combo.setFixedWidth(300)  # Adjust width as needed
-
+        self.ether_type_combo.setFixedWidth(300)  
         self.add_form_row("Ethernet Type:", self.ether_type_combo, self.ethernet_form_layout)
 
         self.page1_layout.addLayout(self.ethernet_form_layout)
@@ -368,7 +367,7 @@ class PacketCrafterApp(QMainWindow):
         """)
         self.ip_proto_combo.setCurrentText("ip")
 
-        self.ip_proto_combo.setFixedWidth(300)  # Adjust width as needed
+        self.ip_proto_combo.setFixedWidth(300)  
 
         self.add_form_row("Protocol:", self.ip_proto_combo, self.ip_form_layout)
 
@@ -666,10 +665,8 @@ class PacketCrafterApp(QMainWindow):
 
 
 
-        # Add widgets to the layout
         self.page5_layout.addLayout(self.button_layout)
 
-        # Add the page to the stacked widget
         self.stacked_widget.addWidget(self.page5)
 
     def create_display_packet(self):
