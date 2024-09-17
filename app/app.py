@@ -431,7 +431,7 @@ class SnifferApp(QMainWindow):
         """)
 
 
-        self.packet_sniffer = SnifferTab(self.selected_interface)
+        self.packet_sniffer = SnifferTab(self.selected_interface , self)
         self.logger = Logger()
         self.tabs.addTab(self.packet_sniffer, "Packet Sniffer")
 
@@ -602,8 +602,9 @@ class SnifferApp(QMainWindow):
         event.accept()
 
 class SnifferTab(QWidget):
-    def __init__(self,selected_interface):
+    def __init__(self,selected_interface , parent):
         super().__init__()
+        self.parent = parent
         self.paused = False
         self.packets = []
         self.selected_interface = selected_interface
@@ -786,7 +787,7 @@ class SnifferTab(QWidget):
         row = index.row()
         packet = self.table_model.getPacket(row) 
         if packet:
-            details_window = PacketDetailsWindow(packet)
+            details_window = PacketDetailsWindow(packet , self.parent)
             details_window.exec_()
 
 
@@ -800,6 +801,9 @@ class SnifferTab(QWidget):
             self.table_model._packets.clear()  
             for filtered_packet in self.filtered_packets :
                 self.process_packet(filtered_packet , filtered_from_pcap=True)
+        else : 
+            self.table_model._packets.clear()  
+
         self.start_sniffing()
 
     def pyshark_to_scapy(self , pyshark_packet):
