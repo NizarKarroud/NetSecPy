@@ -4,9 +4,9 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QMenuBar,
     QAction, QStatusBar, QHBoxLayout, QFrame, QScrollArea, QRadioButton,
     QButtonGroup, QPushButton, QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView , QLineEdit , QStackedWidget , QGridLayout , QFileDialog
-    , QDialog , QTextEdit , QToolBox , QListWidget , QMessageBox , QTreeView, QFileSystemModel
+    , QDialog , QTextEdit , QToolBox , QListWidget , QMessageBox , QTreeView, QFileSystemModel , QTableView
 )
-from PyQt5.QtCore import Qt, QMetaObject, Q_ARG, pyqtSlot ,  QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, pyqtSignal , QAbstractTableModel
 from scapy.all import  IP_PROTOS  , Ether , wrpcap , hexdump
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import QThread, pyqtSignal 
@@ -20,6 +20,55 @@ from monitoring.logger import Logger
 from visualization.main import NTA , EtherAnalyzer , IpAnalyzer , TransportAnalyzer
 from craft.craft import PacketCrafterApp
 
+
+class PacketTableModel(QAbstractTableModel):
+    def __init__(self):
+        super(PacketTableModel, self).__init__()
+        self._data = []
+        self.headers = ["No.", "Timestamp", "Source IP", "Destination IP", "Protocol", "Length", "Source Port", "Destination Port"]
+        self._packets = []  
+        
+    def data(self, index, role):
+        if role == Qt.DisplayRole:
+            if index.column() == 0:
+                # Display row number
+                return str(index.row() + 1)
+            else:
+                return str(self._data[index.row()][index.column() - 1])  # Adjust column index for data
+
+    def rowCount(self, index):
+        return len(self._data)
+
+    def columnCount(self, index):
+        return len(self.headers)
+
+    def get_row_data(self, row):
+        try :
+            return self._data[row]
+        except Exception :
+            return None
+        
+    def headerData(self, section, orientation, role):
+        if role == Qt.DisplayRole:
+            if orientation == Qt.Horizontal:
+                return self.headers[section]
+
+    def addData(self, new_data, packet):
+        self.beginInsertRows(self.index(self.rowCount(self), 0), self.rowCount(self), self.rowCount(self) + len(new_data) - 1)
+        self._data.extend(new_data)
+        self._packets.extend(packet)  
+        self.endInsertRows()
+
+    def getPacket(self, row):
+        if 0 <= row < len(self._packets):
+            return self._packets[row]
+        return None
+    
+    def clearData(self):
+        self.beginResetModel()  
+        self._data.clear()
+        self.endResetModel() 
+
 class SnifferThread(QThread):
     packet_received = pyqtSignal(object)
 
@@ -30,15 +79,14 @@ class SnifferThread(QThread):
         self.stop_sniffing = False
     
     def run(self):
-
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
         if self.filter:
-            self.sniffer = pyshark.LiveCapture(interface=self.interface, display_filter=self.filter , use_json =True ,  include_raw = True )
+            self.sniffer = pyshark.LiveCapture(interface=self.interface, display_filter=self.filter, use_json=True, include_raw=True)
         else:
-            self.sniffer = pyshark.LiveCapture(interface=self.interface, use_json =True ,  include_raw = True )
-        
+            self.sniffer = pyshark.LiveCapture(interface=self.interface, use_json=True, include_raw=True)
+
         try:
             for packet in self.sniffer.sniff_continuously():
                 if self.stop_sniffing:
@@ -47,13 +95,13 @@ class SnifferThread(QThread):
         except Exception as e:
             pass
         finally:
-            loop.close()  # Close the event loop when done
+            loop.close()
 
     def stop(self):
         self.stop_sniffing = True
         if self.sniffer:
             self.sniffer.close()
-        self.wait()  # Ensure the thread has finished
+        self.wait()
 
 class PacketDetailsWindow(QDialog):
     def __init__(self, packet, parent=None):
@@ -62,43 +110,33 @@ class PacketDetailsWindow(QDialog):
         self.setWindowTitle("Packet Details")
         self.setGeometry(100, 100, 1024, 768)
 
-
         layout = QVBoxLayout()
-
 
         self.packet_text = QTextEdit(self)
         self.packet_text.setReadOnly(True)
 
-        formatted_packet = self.format_packet(packet) + "\n Hex Dump : \n \n " +hexdump(Ether(bytes(packet.get_raw_packet())), dump=True)
-        
+        formatted_packet = self.format_packet(packet) + "\n Hex Dump : \n \n " + hexdump(Ether(bytes(packet.get_raw_packet())), dump=True)
 
         self.packet_text.setPlainText(formatted_packet)
 
-
         layout.addWidget(self.packet_text)
-
-
         self.setLayout(layout)
 
-    def format_packet(self , pyshark_packet):
+    def format_packet(self, pyshark_packet):
         raw_bytes = bytes(pyshark_packet.get_raw_packet())
         packet = Ether(raw_bytes)
 
         output_buffer = io.StringIO()
 
         sys.stdout = output_buffer
-
         packet.show()
-
         sys.stdout = sys.__stdout__
 
-
         captured_output = output_buffer.getvalue()
-
         output_buffer.close()
 
         return captured_output
-    
+  
 class ScriptWindow(QDialog):
     def __init__(self, service, script_name, parent=None):
         super(ScriptWindow, self).__init__(parent)
@@ -183,15 +221,8 @@ class SnifferApp(QMainWindow):
         
         self.sniffer_thread = None
 
-        self.packets = []
-
         self.selected_interface = None
 
-        self.packet_buffer = []  
-        self.batch_size = 50    
-
-
-        self.paused = False
 
         self.setWindowTitle("NetSecPy")
         self.setGeometry(100, 100, 1024, 768)
@@ -402,7 +433,9 @@ class SnifferApp(QMainWindow):
         """)
 
 
-        self.add_sniffer_tab()
+        self.packet_sniffer = SnifferTab(self.selected_interface)
+        self.logger = Logger()
+        self.tabs.addTab(self.packet_sniffer, "Packet Sniffer")
 
         self.recon_tab = ReconTab(scanner=self.scanner)
         self.tabs.addTab(self.recon_tab, "Recon")
@@ -505,64 +538,84 @@ class SnifferApp(QMainWindow):
         self.packet_crafter_window = PacketCrafterApp()
         self.packet_crafter_window.show()
 
-    def add_sniffer_tab(self):
+    def export_as_pcap(self ):
+        options = QFileDialog.Options()
+        file_name, _ = QFileDialog.getSaveFileName(self, "Save PCAP File", "", "PCAP Files (*.pcap);;All Files (*)", options=options)
+        
+        if not file_name:
+            return  # User canceled the dialog
+        
+        try :
+            scapy_packets = [self.packet_sniffer.pyshark_to_scapy(packet) for packet in  self.packet_sniffer.packets]
+            wrpcap(file_name,scapy_packets)
+        except Exception as e:
+            QMessageBox.critical(self, "Export Error", f"Failed to export packets: {e}")
 
-        sniffer_tab = QWidget()
-        layout = QVBoxLayout(sniffer_tab)
-
-
-        filter_layout = QHBoxLayout()
-
-        self.filter_input = QLineEdit(self)
-        self.filter_input.setPlaceholderText("Enter Display filter...")
-        self.filter_input.setStyleSheet("""
-            QLineEdit {
-                border: 2px solid #555555;
-                border-radius: 15px;
-                padding: 10px;
-                background-color: #2A363B;
-                color: #FFFFFF;
-                font-size: 16px;
-            }
-        """)
-        filter_layout.addWidget(self.filter_input)
-
-
-        self.apply_filter_button = QPushButton("Apply Filter", self)
-        self.apply_filter_button.setStyleSheet("""
-            QPushButton {
-                border: 2px solid #202C31;
-                border-radius: 15px;
-                padding: 10px;
-                background-color: #202C31;
-                color: #FFFFFF;
-                font-size: 16px;
-            }
-            QPushButton:hover {
-                background-color: #151D20 ;
-            }
-            QPushButton:pressed {
-                background-color: #151D20;
-            }
-        """)
-        filter_layout.addWidget(self.apply_filter_button)
-
-        self.apply_filter_button.clicked.connect(self.apply_filters)
+    def export_as_csv(self):
+        file_name, _ = QFileDialog.getSaveFileName(self, "Save CSV File", "", "CSV Files (*.csv)")
+        if file_name:
+            with open(file_name, 'w', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerow(["Timestamp", "Source IP", "Destination IP", "Protocol", "Length", "Source Port", "Destination Port"])
+                model = self.packet_sniffer.table_model
+                for row in range(model.rowCount(model)):
+                    writer.writerow(model.get_row_data(row))
 
 
-        layout.addLayout(filter_layout)
+    def export_as_json(self):
 
+        file_name, _ = QFileDialog.getSaveFileName(self, "Save JSON File", "", "JSON Files (*.json)")
+        
+        if file_name:
+            data = []
+            model = self.packet_sniffer.table_model
 
-        self.sniffer_table = QTableWidget(sniffer_tab)
-        self.sniffer_table.setColumnCount(8) 
-        self.sniffer_table.setHorizontalHeaderLabels(["Timestamp" ,"Source IP", "Destination IP", "Protocol", "Length", "Source Port", "Destination Port","More Info"])
+            for row in range(model.rowCount(model)):
+                row_data = model.get_row_data(row)
+                if row_data:
+                    # Convert row data to a dictionary with column headers as keys
+                    row_dict = {
+                        "Timestamp": row_data[0],
+                        "Source IP": row_data[1],
+                        "Destination IP": row_data[2],
+                        "Protocol": row_data[3],
+                        "Length": row_data[4],
+                        "Source Port": row_data[5],
+                        "Destination Port": row_data[6]
+                    }
+                    data.append(row_dict)
 
+            with open(file_name, 'w', newline='') as file:
+                json.dump(data, file, indent=4)
+                
+    def open_documentation(self):
+        webbrowser.open("https://github.com/NizarKarroud/NetSecPy")
 
-        self.sniffer_table.horizontalHeader().setStretchLastSection(True)
-        self.sniffer_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+    
+    def closeEvent(self, event):
+        if hasattr(self , "packet_sniffer") and self.packet_sniffer.sniffer_thread and self.packet_sniffer.sniffer_thread.isRunning():
+            self.packet_sniffer.sniffer_thread.stop()
+        
+        if hasattr(self, 'logger') and self.logger and len(self.packet_sniffer.packets)>0:
+            self.logger.save_pcap([self.packet_sniffer.pyshark_to_scapy(packet) for packet in self.packet_sniffer.packets])
 
+        if os.path.exists("temp.pcap"):
+            os.remove("temp.pcap")
+    
+        event.accept()
 
-        self.sniffer_table.horizontalHeader().setStyleSheet("""
+class SnifferTab(QWidget):
+    def __init__(self,selected_interface):
+        super().__init__()
+        self.paused = False
+        self.packets = []
+        self.selected_interface = selected_interface
+        self.table_model = PacketTableModel()
+        self.table_view = QTableView()
+        self.table_view.setModel(self.table_model)
+        self.table_view.clicked.connect(self.on_row_click)
+
+        self.table_view.horizontalHeader().setStyleSheet("""
             QHeaderView::section {
                 background-color: #99B898;
                 color: #FFFFFF;
@@ -570,7 +623,7 @@ class SnifferApp(QMainWindow):
                 border: 1px solid #444444;
             }
         """)
-        self.sniffer_table.verticalHeader().setStyleSheet("""
+        self.table_view.verticalHeader().setStyleSheet("""
             QHeaderView::section {
                 background-color: #99B898;
                 color: #FFFFFF;
@@ -578,7 +631,7 @@ class SnifferApp(QMainWindow):
                 border: 1px solid #444444;
             }
         """)
-        self.sniffer_table.setStyleSheet("""
+        self.table_view.setStyleSheet("""
             QScrollBar:vertical {
                 border: 1px solid #555555;
                 background: #2A363B;
@@ -626,20 +679,71 @@ class SnifferApp(QMainWindow):
             }
         """)
 
-        layout.addWidget(self.sniffer_table)
+        # Filter input and apply button layout
+        filter_layout = QHBoxLayout()
 
+        # Add the filter input and button
+        self.filter_input = QLineEdit(self)
+        self.filter_input.setPlaceholderText("Enter Display filter...")
+        self.filter_input.setStyleSheet("""
+            QLineEdit {
+                border: 2px solid #555555;
+                border-radius: 15px;
+                padding: 10px;
+                background-color: #2A363B;
+                color: #FFFFFF;
+                font-size: 16px;
+            }
+        """)
+        filter_layout.addWidget(self.filter_input)
+
+        self.apply_filter_button = QPushButton("Apply Filter", self)
+        self.apply_filter_button.setStyleSheet("""
+            QPushButton {
+                border: 2px solid #202C31;
+                border-radius: 15px;
+                padding: 10px;
+                background-color: #202C31;
+                color: #FFFFFF;
+                font-size: 16px;
+            }
+            QPushButton:hover {
+                background-color: #151D20;
+            }
+            QPushButton:pressed {
+                background-color: #151D20;
+            }
+        """)
+        filter_layout.addWidget(self.apply_filter_button)
+
+        # Connect button to filter logic (placeholder for now)
+        self.apply_filter_button.clicked.connect(self.apply_filters)
+
+        # Set layout
+        layout = QVBoxLayout()
+        layout.addLayout(filter_layout)  # Add the filter layout first
+        layout.addWidget(self.table_view)
 
         self.pause_button = QPushButton("Pause", self)
-        self.pause_button.setStyleSheet("font-size: 16px; padding: 10px; background-color: #202C31 ; color: #FFFFFF; ")
+        self.pause_button.setStyleSheet("font-size: 16px; padding: 10px; background-color: #202C31; color: #FFFFFF;")
         self.pause_button.clicked.connect(self.toggle_pause)
         layout.addWidget(self.pause_button)
 
-
-        self.tabs.addTab(sniffer_tab, "Sniffer")
-
-        self.logger = Logger()
+        self.setLayout(layout)
 
         self.start_sniffing()
+
+
+    def start_sniffing(self):
+        if hasattr(self , "sniffer_thread" ) and self.sniffer_thread:
+            self.sniffer_thread.stop()
+            self.sniffer_thread.wait()
+
+        filter = self.filter_input.text()
+        self.sniffer_thread = SnifferThread(self.selected_interface, filter)
+        self.sniffer_thread.packet_received.connect(self.process_packet)
+        self.sniffer_thread.start()
+
 
     def toggle_pause(self):
         if self.paused:
@@ -651,180 +755,69 @@ class SnifferApp(QMainWindow):
             self.sniffer_thread.stop()
             self.pause_button.setText("Resume")
 
+    def process_packet(self, packet , filtered_from_pcap=False):
+        self.packets.append(packet)
+        try:
+            timestamp = str(packet.sniff_time)
+            if hasattr(packet, 'ip'):
+                src_ip = packet.ip.src
+                dst_ip = packet.ip.dst
+                proto = IP_PROTOS.d.get(int(packet.ip.proto), f"{packet.ip.proto}")
+            else :
+                src_ip = "N/A"
+                dst_ip = "N/A"
+                proto = "N/A"
 
-    def start_sniffing(self):
-        if self.sniffer_thread:
-            self.sniffer_thread.stop()
-            self.sniffer_thread.wait()
+            length = str(len(packet))
 
-        filter = self.filter_input.text()
-        self.sniffer_thread = SnifferThread(self.selected_interface, filter)
-        self.sniffer_thread.packet_received.connect(self.pyshark_packet_handler)
-        self.sniffer_thread.start()
-
-    def pyshark_packet_handler(self, packet, filtered_from_pcap=False):
-        if filtered_from_pcap == False:
-            self.packets.append(packet)
-
-            self.packet_buffer.append(packet)
-            if len(self.packet_buffer) >= self.batch_size:
-                # If buffer is full, process and update the table
-                QMetaObject.invokeMethod(
-                    self, "update_table",
-                    Qt.QueuedConnection,
-                    Q_ARG(list, self.packet_buffer)
-                )
-                self.packet_buffer = [] 
-
-        else : 
-            QMetaObject.invokeMethod(
-                self, "update_table",
-                Qt.QueuedConnection,
-                Q_ARG(list, self.filtered_packets)
-            )
-            self.filtered_packets = []
-    def apply_filters(self):
-            self.sniffer_thread.stop()
-            self.sniffer_thread.wait()
-            self.sniffer_table.setRowCount(0)
-            if self.filter_input.text() :
-                wrpcap("temp.pcap" , [self.pyshark_to_scapy(packet) for packet in  self.packets])
-                self.filtered_packets = [packet for packet in pyshark.FileCapture('temp.pcap', display_filter=self.filter_input.text() , use_json=True , include_raw=True) ]
-                self.pyshark_packet_handler(self.filtered_packets , filtered_from_pcap=True)
-            self.start_sniffing()
-    
-    @pyqtSlot(list)
-    def update_table(self, packet_list):
-        if not self.paused:
-            for packet in packet_list:
-                timestamp = str(packet.sniff_time)
-                if hasattr(packet, 'ip'):
-                    src_ip = packet.ip.src
-                    dst_ip = packet.ip.dst
-                    proto = IP_PROTOS.d.get(int(packet.ip.proto), f"{packet.ip.proto}")
-                else :
-                    src_ip = "N/A"
-                    dst_ip = "N/A"
-                    proto = "N/A"
-
-                length = str(len(packet))
-
-                try:
-                    if hasattr(packet, proto):
-                        layer = getattr(packet, proto)
-                        src_port = str(getattr(layer, 'srcport', "N/A")) 
-                        dst_port = str(getattr(layer, 'dstport', "N/A"))
-                    else:
-                        src_port = "N/A"
-                        dst_port = "N/A"
-                except Exception:
+            try:
+                if hasattr(packet, proto):
+                    layer = getattr(packet, proto)
+                    src_port = str(getattr(layer, 'srcport', "N/A")) 
+                    dst_port = str(getattr(layer, 'dstport', "N/A"))
+                else:
                     src_port = "N/A"
                     dst_port = "N/A"
+            except Exception:
+                src_port = "N/A"
+                dst_port = "N/A"
 
-                row_position = self.sniffer_table.rowCount()
-                self.sniffer_table.insertRow(row_position)
-                self.sniffer_table.setItem(row_position, 0, QTableWidgetItem(timestamp))
-                self.sniffer_table.setItem(row_position, 1, QTableWidgetItem(src_ip))
-                self.sniffer_table.setItem(row_position, 2, QTableWidgetItem(dst_ip))
-                self.sniffer_table.setItem(row_position, 3, QTableWidgetItem(proto))
-                self.sniffer_table.setItem(row_position, 4, QTableWidgetItem(length))
-                self.sniffer_table.setItem(row_position, 5, QTableWidgetItem(src_port))
-                self.sniffer_table.setItem(row_position, 6, QTableWidgetItem(dst_port))
+            row_data = [str(timestamp), src_ip, dst_ip, proto, length, src_port, dst_port]
 
-                more_info_button = QPushButton("More Info")
-                more_info_button.setStyleSheet("""
-                    QPushButton {
-                        background-color: #202C31;
-                        color: #FFFFFF;
-                        font-size: 14px;
-                        padding: 5px;
-                        border-radius: 5px;
-                    }
-                    QPushButton:hover {
-                        background-color: #151D20;
-                    }
-                    QPushButton:pressed {
-                        background-color: #0F1416;
-                    }
-                """)
-                more_info_button.clicked.connect(lambda: self.show_packet(packet))
-                self.sniffer_table.setCellWidget(row_position, 7, more_info_button)
+            self.table_model.addData([row_data], [packet])  
 
-    def show_packet(self,packet):
-        details_window = PacketDetailsWindow(packet,self)
-        details_window.exec_()  
-
-    def export_as_pcap(self ):
-        options = QFileDialog.Options()
-        file_name, _ = QFileDialog.getSaveFileName(self, "Save PCAP File", "", "PCAP Files (*.pcap);;All Files (*)", options=options)
-        
-        if not file_name:
-            return  # User canceled the dialog
-        
-        try :
-            scapy_packets = [self.pyshark_to_scapy(packet) for packet in  self.packets]
-            wrpcap(file_name,scapy_packets)
         except Exception as e:
-            QMessageBox.critical(self, "Export Error", f"Failed to export packets: {e}")
+            print(f"Error processing packet: {e}")
 
-    def export_as_csv(self):
-        file_name, _ = QFileDialog.getSaveFileName(self, "Save CSV File", "", "CSV Files (*.csv)")
-        if file_name:
-            with open(file_name, 'w', newline='') as file:
-                writer = csv.writer(file)
-                writer.writerow(["Timestamp", "Source IP", "Destination IP", "Protocol", "Length", "Source Port", "Destination Port"])
-                for row in range(self.sniffer_table.rowCount()):
-                    row_data = [self.sniffer_table.item(row, col).text()for col in range(0,7)]
-                    writer.writerow(row_data)
+    def on_row_click(self, index):
+        row = index.row()
+        packet = self.table_model.getPacket(row)  # Retrieve the actual packet from the model
+        if packet:
+            details_window = PacketDetailsWindow(packet)
+            details_window.exec_()
 
-    def export_as_json(self):
+    def closeEvent(self, event):
+        # Stop the sniffer thread on window close
+        self.sniffer_thread.stop()
+        event.accept()
 
-        file_name, _ = QFileDialog.getSaveFileName(self, "Save JSON File", "", "JSON Files (*.json)")
-        
-        if file_name:
-            data = []
-
-            for row in range(self.sniffer_table.rowCount()):
-                row_data = {}
-                for col in range(7):
-                    item = self.sniffer_table.item(row, col)
-                    
-
-                    if isinstance(item, QTableWidgetItem):
-                        header = self.sniffer_table.horizontalHeaderItem(col).text()  
-                        row_data[header] = item.text()
-                    else:
-                        header = self.sniffer_table.horizontalHeaderItem(col).text() 
-                        row_data[header] = ""
-                
-
-                data.append(row_data)
-            
-
-            with open(file_name, 'w', newline='') as file:
-                json.dump(data, file, indent=4)
-                
-    def open_documentation(self):
-        webbrowser.open("https://github.com/NizarKarroud/NetSecPy")
+    def apply_filters(self):
+        self.sniffer_thread.stop()
+        self.sniffer_thread.wait()
+        self.table_model.clearData()
+        if self.filter_input.text() :
+            wrpcap("temp.pcap" , [self.pyshark_to_scapy(packet) for packet in  self.table_model._packets])
+            self.filtered_packets = [packet for packet in pyshark.FileCapture('temp.pcap', display_filter=self.filter_input.text() , use_json=True , include_raw=True) ]
+            self.table_model._packets.clear()  
+            for filtered_packet in self.filtered_packets :
+                self.process_packet(filtered_packet , filtered_from_pcap=True)
+        self.start_sniffing()
 
     def pyshark_to_scapy(self , pyshark_packet):
         raw_bytes = bytes(pyshark_packet.get_raw_packet())
 
         scapy_packet = Ether(raw_bytes)
         return scapy_packet
-    
-    def closeEvent(self, event):
-        if self.sniffer_thread and self.sniffer_thread.isRunning():
-            self.sniffer_thread.stop()
-        
-        if hasattr(self, 'logger') and self.logger and len(self.packets)>0:
-            self.logger.save_pcap([self.pyshark_to_scapy(packet) for packet in self.packets])
-
-        if os.path.exists("temp.pcap"):
-            os.remove("temp.pcap")
-    
-
-        event.accept()
 
 class LoggerTab(QWidget):
     def __init__(self, logs_dir):
@@ -1187,7 +1180,7 @@ class AnalysisTab(QWidget):
             del self.ether_analyser
         if hasattr(self, 'ip_analyser'):
             del self.ip_analyser
-        self.nta = NTA(packets=[self.parent.pyshark_to_scapy(packet) for packet in self.parent.packets])
+        self.nta = NTA(packets=[self.parent.packet_sniffer.pyshark_to_scapy(packet) for packet in self.parent.packet_sniffer.packets])
         self.ether_analyser = EtherAnalyzer(self.nta.data)
         self.ip_analyser = IpAnalyzer(self.nta.data)
         self.transport_analyser = TransportAnalyzer(self.nta.data)
@@ -1244,7 +1237,7 @@ class AnalysisTab(QWidget):
             self.open_file_dialog()
         else:
             self.update_packets_button.setVisible(True)  # Show the button
-            self.nta = NTA(packets=[self.parent.pyshark_to_scapy(packet) for packet in self.parent.packets])
+            self.nta = NTA(packets=[self.parent.packet_sniffer.pyshark_to_scapy(packet) for packet in self.parent.packet_sniffer.packets])
             self.stacked_widget.setCurrentWidget(self.analysis_page)
    
         self.ether_analyser = EtherAnalyzer(self.nta.data)
